@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")"
-wasm-pack build ../crates/steprs-wasm --target web --out-dir ./pkg --release
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/web/pkg"
+rm -rf "$OUT"
+wasm-pack build "$ROOT/crates/steprs-wasm" --target web --out-dir "$OUT" --release
+test -f "$OUT/steprs_wasm.js"
 echo "WASM built → web/pkg/"

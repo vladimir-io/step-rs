@@ -38,6 +38,9 @@ jobs:
       - name: Build WASM
         run: make wasm
 
+      - name: Verify WASM bundle
+        run: test -f web/pkg/steprs_wasm.js
+
       - name: Stage samples
         run: |
           rm -f web/samples
