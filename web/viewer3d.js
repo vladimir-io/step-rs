@@ -1,11 +1,12 @@
 /**
- * Part preview — opaque tessellated mesh, focused x-ray on selected bore.
+ * Part preview — stock envelope + selected bore x-ray.
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { canvasTheme, onThemeChange } from "./theme.js";
+
+const MAX_COORD = 100_000;
 
 function stepToThree(x, y, z) {
   const nx = Number(x);
@@ -42,8 +43,59 @@ function toColor(v) {
   return parseInt(h, 16) || 0x888888;
 }
 
-function hasSolidMesh(mesh) {
-  return mesh?.indices?.length >= 3 && mesh?.vertices?.length >= 3;
+function isStockEnvelopeMesh(mesh) {
+  return mesh?.vertices?.length === 8 && (mesh?.indices?.length ?? 0) >= 36;
+}
+
+function hasNativeMesh(mesh) {
+  return mesh?.indices?.length >= 3 && mesh?.vertices?.length >= 3 && !isStockEnvelopeMesh(mesh);
+}
+
+function saneStock(stock) {
+  if (!stock?.min || !stock?.max) return null;
+  for (const c of [...stock.min, ...stock.max]) {
+    if (!Number.isFinite(c) || Math.abs(c) > MAX_COORD) return null;
+  }
+  const size = stock.max.map((v, i) => v - stock.min[i]);
+  if (size.some((s) => s <= 0 || s > MAX_COORD)) return null;
+  return stock;
+}
+
+function stockFromHoles(holes) {
+  if (!holes?.length) return null;
+  let min = [Infinity, Infinity, Infinity];
+  let max = [-Infinity, -Infinity, -Infinity];
+  const grow = (p, r) => {
+    for (let i = 0; i < 3; i++) {
+      min[i] = Math.min(min[i], p[i] - r);
+      max[i] = Math.max(max[i], p[i] + r);
+    }
+  };
+  for (const h of holes) {
+    const o = h.axis_origin;
+    const d = h.axis_direction;
+    if (!o || !d) continue;
+    const ox = o.x ?? o[0];
+    const oy = o.y ?? o[1];
+    const oz = o.z ?? o[2];
+    const dx = d.x ?? d[0];
+    const dy = d.y ?? d[1];
+    const dz = d.z ?? d[2];
+    const r = Math.max(h.radius ?? 1, 0.5);
+    const depth = Math.max(h.depth ?? r * 2, r);
+    const p0 = [ox, oy, oz];
+    const p1 = [ox + dx * depth, oy + dy * depth, oz + dz * depth];
+    if (![...p0, ...p1].every((c) => Number.isFinite(c) && Math.abs(c) <= MAX_COORD)) continue;
+    grow(p0, r);
+    grow(p1, r);
+  }
+  if (!min[0].isFinite()) return null;
+  const pad = Math.max(...max.map((v, i) => v - min[i])) * 0.1;
+  const p = Math.max(pad, 3);
+  return {
+    min: min.map((v) => v - p),
+    max: max.map((v) => v + p),
+  };
 }
 
 export function createViewer3d(canvas) {
@@ -57,27 +109,20 @@ export function createViewer3d(canvas) {
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  pmrem.compileEquirectangularShader();
+  renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500000);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 500000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
-  controls.rotateSpeed = 0.5;
+  controls.dampingFactor = 0.08;
+  controls.rotateSpeed = 0.55;
 
   const partGroup = new THREE.Group();
   const overlayGroup = new THREE.Group();
   scene.add(partGroup, overlayGroup);
 
   let grid = null;
-  let envTexture = null;
   let lights = [];
   let lastAnalysis = null;
   let selectedHole = 0;
@@ -88,55 +133,48 @@ export function createViewer3d(canvas) {
   function applyTheme() {
     const t = canvasTheme();
     scene.background = new THREE.Color(toColor(t.threeBgHex));
-    const fogDensity = t.threeFog || 0.00006;
-    scene.fog = fogDensity > 0 ? new THREE.FogExp2(toColor(t.threeBgHex), fogDensity) : null;
-    renderer.toneMappingExposure = document.documentElement.dataset.theme === "light" ? 0.98 : 1.02;
+    scene.fog = null;
     if (grid) {
       grid.material.color.setHex(toColor(t.threeGrid));
-      grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.35 : 0.22;
+      grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.4 : 0.28;
     }
   }
 
-  function setEnvironment() {
-    if (envTexture) envTexture.dispose();
-    envTexture = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-    scene.environment = envTexture;
+  function partMaterial(t) {
+    const dark = document.documentElement.dataset.theme !== "light";
+    return new THREE.MeshPhongMaterial({
+      color: dark ? 0x7a808c : 0x9aa3b2,
+      specular: dark ? 0x222228 : 0x444450,
+      shininess: 28,
+      flatShading: false,
+    });
   }
 
-  function partMaterial(t) {
-    return new THREE.MeshStandardMaterial({
-      color: toColor(t.threePart),
-      metalness: 0.42,
-      roughness: 0.48,
-      envMapIntensity: 0.7,
-      transparent: false,
-      opacity: 1,
+  function edgeMaterial() {
+    const dark = document.documentElement.dataset.theme !== "light";
+    return new THREE.LineBasicMaterial({
+      color: dark ? 0x1a1a22 : 0x3a4250,
+      transparent: true,
+      opacity: dark ? 0.55 : 0.45,
     });
   }
 
   function focusBoreMaterial(accent) {
-    return new THREE.MeshPhysicalMaterial({
-      color: accent,
-      emissive: accent,
-      emissiveIntensity: 1.4,
-      metalness: 0,
-      roughness: 0.2,
-      transparent: true,
-      opacity: 0.62,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      depthTest: true,
-      toneMapped: false,
-    });
-  }
-
-  function markerRingMaterial(accent) {
     return new THREE.MeshBasicMaterial({
       color: accent,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.5,
       depthWrite: false,
-      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+  }
+
+  function markerRingMaterial(accent, opacity) {
+    return new THREE.MeshBasicMaterial({
+      color: accent,
+      transparent: true,
+      opacity,
+      depthWrite: false,
     });
   }
 
@@ -162,10 +200,9 @@ export function createViewer3d(canvas) {
 
   function addRing(radius, ax, origin, offset, accent, opacity) {
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(radius, Math.max(radius * 0.04, 0.15), 8, 48),
-      markerRingMaterial(accent)
+      new THREE.TorusGeometry(radius, Math.max(radius * 0.035, 0.12), 10, 40),
+      markerRingMaterial(accent, opacity)
     );
-    ring.material.opacity = opacity;
     ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), ax);
     ring.position.copy(origin).addScaledVector(ax, offset);
     ring.renderOrder = 2;
@@ -185,22 +222,22 @@ export function createViewer3d(canvas) {
     const dz = d.z ?? d[2];
     const ax = stepToThree(dx, dy, dz).normalize();
     const origin = stepToThree(ox, oy, oz);
-    const accent = toColor(t.threeCut || "#5b9aff");
+    const accent = toColor(t.threeCut || "#4a9eff");
     const segments = holeSegments(hole);
     if (!segments.length) return;
 
     let cursor = 0;
     for (const seg of segments) {
       if (mode === "focus") {
-        const coreGeo = new THREE.CylinderGeometry(seg.radius, seg.radius, seg.depth, 48, 1, true);
+        const coreGeo = new THREE.CylinderGeometry(seg.radius, seg.radius, seg.depth, 40, 1, true);
         const core = new THREE.Mesh(coreGeo, focusBoreMaterial(accent));
         orientAlongAxis(core, ax, origin, cursor, seg.depth);
         core.renderOrder = 2;
         overlayGroup.add(core);
-        addRing(seg.radius, ax, origin, cursor, accent, 0.85);
-        addRing(seg.radius, ax, origin, cursor + seg.depth, accent, 0.85);
+        addRing(seg.radius, ax, origin, cursor, accent, 0.9);
+        addRing(seg.radius, ax, origin, cursor + seg.depth, accent, 0.9);
       } else {
-        addRing(seg.radius * 0.92, ax, origin, cursor, accent, 0.22);
+        addRing(seg.radius * 0.95, ax, origin, cursor, accent, 0.28);
       }
       cursor += seg.depth;
     }
@@ -239,39 +276,26 @@ export function createViewer3d(canvas) {
   }
 
   function addStockBox(stock, t, partBox) {
-    const mn = stock?.min;
-    const mx = stock?.max;
-    if (!mn || !mx) return;
-    const min = stepToThree(mn[0], mn[1], mn[2]);
-    const max = stepToThree(mx[0], mx[1], mx[2]);
+    const min = stepToThree(stock.min[0], stock.min[1], stock.min[2]);
+    const max = stepToThree(stock.max[0], stock.max[1], stock.max[2]);
     const size = new THREE.Vector3().subVectors(max, min);
     if (size.x <= 0 || size.y <= 0 || size.z <= 0) return;
     const center = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
     const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
     const box = new THREE.Mesh(geo, partMaterial(t));
     box.position.copy(center);
-    box.castShadow = true;
-    box.receiveShadow = true;
     partGroup.add(box);
-    partBox.expandByObject(box);
+
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMaterial());
+    edges.position.copy(center);
+    partGroup.add(edges);
+
+    partBox.expandByPoint(min);
+    partBox.expandByPoint(max);
   }
 
-  function addAnalyticFallback(preview, t, partBox) {
-    for (const c of preview?.cylinders || []) {
-      if (!isVec3(c.axis) || !isVec3(c.origin) || !Number.isFinite(c.radius) || c.radius <= 0) continue;
-      const h = Number(c.height);
-      if (!Number.isFinite(h) || h <= 0) continue;
-      const geo = new THREE.CylinderGeometry(c.radius, c.radius, h, 64, 1, false);
-      const m = new THREE.Mesh(geo, partMaterial(t));
-      m.castShadow = true;
-      m.receiveShadow = true;
-      const ax = stepToThree(c.axis[0], c.axis[1], c.axis[2]).normalize();
-      const pos = stepToThree(c.origin[0], c.origin[1], c.origin[2]);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax);
-      m.position.copy(pos).addScaledVector(ax, h / 2);
-      partGroup.add(m);
-      partBox.expandByObject(m);
-    }
+  function resolveStock(preview, holes) {
+    return saneStock(preview?.stock) ?? stockFromHoles(holes);
   }
 
   function fitCamera(box) {
@@ -283,53 +307,36 @@ export function createViewer3d(canvas) {
     partScale = Math.max(size.x, size.y, size.z, 1);
 
     const fov = (camera.fov * Math.PI) / 180;
-    const dist = (partScale / (2 * Math.tan(fov / 2))) * 1.35;
-    camera.position.set(center.x + dist * 0.68, center.y + dist * 0.48, center.z + dist * 0.72);
-    camera.near = Math.max(partScale * 0.002, 0.05);
-    camera.far = Math.max(partScale * 50, 1000);
+    const dist = (partScale / (2 * Math.tan(fov / 2))) * 1.5;
+    camera.position.set(center.x + dist * 0.75, center.y + dist * 0.55, center.z + dist * 0.8);
+    camera.near = Math.max(partScale * 0.005, 0.1);
+    camera.far = Math.max(partScale * 20, 2000);
     camera.updateProjectionMatrix();
 
     controls.target.copy(center);
     controls.update();
-    controls.minDistance = partScale * 0.25;
-    controls.maxDistance = partScale * 12;
+    controls.minDistance = partScale * 0.3;
+    controls.maxDistance = partScale * 8;
 
     repositionLights(center, partScale);
   }
 
   function repositionLights(center, scale) {
-    const s = scale * 1.8;
+    const s = scale * 2.2;
     if (lights[0]) {
-      lights[0].position.set(center.x + s, center.y + s * 1.2, center.z + s * 0.8);
-      lights[0].target.position.copy(center);
-      lights[0].shadow.camera.left = -s;
-      lights[0].shadow.camera.right = s;
-      lights[0].shadow.camera.top = s;
-      lights[0].shadow.camera.bottom = -s;
-      lights[0].shadow.camera.near = 0.1;
-      lights[0].shadow.camera.far = s * 6;
-      lights[0].shadow.camera.updateProjectionMatrix();
+      lights[0].position.set(center.x + s * 0.7, center.y + s, center.z + s * 0.6);
     }
-    if (lights[1]) lights[1].position.set(center.x - s * 0.8, center.y + s * 0.4, center.z - s);
-    if (lights[2]) lights[2].position.set(center.x, center.y + s * 0.3, center.z - s * 1.2);
+    if (lights[1]) lights[1].position.set(center.x - s * 0.6, center.y + s * 0.35, center.z - s * 0.5);
+    if (lights[2]) lights[2].position.set(center.x, center.y - s * 0.2, center.z + s * 0.8);
   }
 
   function addLights(t) {
-    scene.add(new THREE.HemisphereLight(toColor(t.threeKeyHex || "#fafafa"), toColor(t.threeGrid), 0.35));
-
-    const key = new THREE.DirectionalLight(toColor(t.threeKeyHex || "#ffffff"), 1.35);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    key.shadow.bias = -0.00015;
-    key.shadow.normalBias = 0.02;
-
-    const fill = new THREE.DirectionalLight(toColor(t.threePart), 0.55);
-    const rim = new THREE.DirectionalLight(toColor(t.threeCut || "#5b9aff"), 0.2);
-
-    for (const l of [key, fill, rim]) {
-      scene.add(l);
-      if (l.target) scene.add(l.target);
-    }
+    const ambient = new THREE.AmbientLight(0xffffff, document.documentElement.dataset.theme === "light" ? 0.72 : 0.45);
+    const key = new THREE.DirectionalLight(0xffffff, document.documentElement.dataset.theme === "light" ? 0.85 : 0.95);
+    const fill = new THREE.DirectionalLight(0xc8d0e0, 0.35);
+    const rim = new THREE.DirectionalLight(toColor(t.threeCut || "#5b9aff"), 0.15);
+    scene.add(ambient);
+    for (const l of [key, fill, rim]) scene.add(l);
     return [key, fill, rim];
   }
 
@@ -346,11 +353,11 @@ export function createViewer3d(canvas) {
     box.getSize(size);
     const center = new THREE.Vector3();
     box.getCenter(center);
-    const span = Math.max(size.x, size.z, partScale) * 2.2;
-    grid = new THREE.GridHelper(span, 24, toColor(t.threeGrid), toColor(t.threeGrid));
+    const span = Math.max(size.x, size.z, partScale) * 2.4;
+    grid = new THREE.GridHelper(span, 20, toColor(t.threeGrid), toColor(t.threeGrid));
     grid.material.transparent = true;
-    grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.35 : 0.22;
-    grid.position.set(center.x, box.min.y - partScale * 0.01, center.z);
+    grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.4 : 0.28;
+    grid.position.set(center.x, box.min.y - partScale * 0.005, center.z);
     scene.add(grid);
   }
 
@@ -367,30 +374,40 @@ export function createViewer3d(canvas) {
 
     if (selectedHole >= holes.length) selectedHole = 0;
 
-    if (preview?.bounds?.min?.[0] != null) {
-      partBox.expandByPoint(stepToThree(preview.bounds.min[0], preview.bounds.min[1], preview.bounds.min[2]));
-      partBox.expandByPoint(stepToThree(preview.bounds.max[0], preview.bounds.max[1], preview.bounds.max[2]));
-    }
+    const stock = resolveStock(preview, holes);
 
-    if (hasSolidMesh(mesh)) {
+    if (hasNativeMesh(mesh)) {
       const geo = buildSolidGeometry(mesh);
       if (geo) {
         const solid = new THREE.Mesh(geo, partMaterial(t));
-        solid.castShadow = true;
-        solid.receiveShadow = true;
-        solid.renderOrder = 0;
         partGroup.add(solid);
         partBox.expandByObject(solid);
       }
-    } else if (preview?.stock) {
-      addStockBox(preview.stock, t, partBox);
-    } else {
-      addAnalyticFallback(preview, t, partBox);
+    } else if (stock) {
+      addStockBox(stock, t, partBox);
     }
 
     holes.forEach((h, i) => {
       addCoaxialOverlay(h, t, i === selectedHole ? "focus" : "marker");
+      const r = h.radius ?? 0;
+      const depth = h.depth ?? 0;
+      if (r > 0 && depth > 0 && h.axis_origin && h.axis_direction) {
+        const o = h.axis_origin;
+        const d = h.axis_direction;
+        const ax = stepToThree(d.x ?? d[0], d.y ?? d[1], d.z ?? d[2]).normalize();
+        const origin = stepToThree(o.x ?? o[0], o.y ?? o[1], o.z ?? o[2]);
+        partBox.expandByPoint(origin);
+        partBox.expandByPoint(origin.clone().addScaledVector(ax, depth));
+        const perp = new THREE.Vector3(1, 0, 0).cross(ax);
+        if (perp.lengthSq() < 0.01) perp.set(0, 1, 0).cross(ax);
+        perp.normalize();
+        partBox.expandByPoint(origin.clone().addScaledVector(perp, r));
+      }
     });
+
+    if (partBox.isEmpty() && stock) {
+      addStockBox(stock, t, partBox);
+    }
 
     rebuildGrid(partBox);
     fitCamera(partBox.isEmpty() ? new THREE.Box3().setFromObject(partGroup) : partBox);
@@ -436,26 +453,19 @@ export function createViewer3d(canvas) {
     const w = parent.clientWidth;
     const h = parent.clientHeight;
     if (w < 2 || h < 2) return;
-    canvas.width = Math.floor(w * renderer.getPixelRatio());
-    canvas.height = Math.floor(h * renderer.getPixelRatio());
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
 
   function refresh() {
-    lights.forEach((l) => {
-      scene.remove(l);
-      if (l.target) scene.remove(l.target);
-    });
+    lights.forEach((l) => scene.remove(l));
     lights = addLights(canvasTheme());
-    setEnvironment();
     applyTheme();
     if (lastAnalysis) loadScene(lastAnalysis);
     resize();
   }
 
-  setEnvironment();
   lights = addLights(canvasTheme());
   applyTheme();
 
@@ -473,8 +483,6 @@ export function createViewer3d(canvas) {
       stopLoop();
       ro?.disconnect();
       controls.dispose();
-      envTexture?.dispose();
-      pmrem.dispose();
       renderer.dispose();
     },
   };
