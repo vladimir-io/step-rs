@@ -1,0 +1,16 @@
+[package]
+name = "steprs"
+description = "Pure Rust STEP pipeline: parse, topology, features, G-code"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+steprs-core.workspace = true
+steprs-schema.workspace = true
+steprs-topology.workspace = true
+steprs-features.workspace = true
+steprs-path.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

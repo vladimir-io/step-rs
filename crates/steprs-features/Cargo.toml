@@ -1,0 +1,16 @@
+[package]
+name = "steprs-features"
+description = "Manufacturing feature recognition from STEP B-rep"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+steprs-core.workspace = true
+steprs-schema.workspace = true
+steprs-topology.workspace = true
+serde.workspace = true
+smallvec.workspace = true
+
+[dev-dependencies]
+steprs-core.workspace = true

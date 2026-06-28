@@ -1,0 +1,21 @@
+/*
+  WASM + module workers
+*/
+/pkg/*
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: same-origin
+
+/*
+  Cache static assets; always revalidate HTML
+*/
+/*.js
+  Cache-Control: public, max-age=86400
+
+/*.css
+  Cache-Control: public, max-age=86400
+
+/*.wasm
+  Cache-Control: public, max-age=604800
+
+/index.html
+  Cache-Control: no-cache

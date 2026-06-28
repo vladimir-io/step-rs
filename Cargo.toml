@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/steprs-core",
+    "crates/steprs-schema",
+    "crates/steprs-topology",
+    "crates/steprs-features",
+    "crates/steprs-path",
+    "crates/steprs",
+    "crates/steprs-wasm",
+    "crates/steprs-cli",
+]
+default-members = ["crates/steprs", "crates/steprs-cli"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vladimir-io/step-rs"
+authors = ["Vladimir Gutierrez"]
+
+[workspace.dependencies]
+nom = "7.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+smallvec = { version = "1.13", features = ["serde"] }
+
+steprs-core = { path = "crates/steprs-core" }
+steprs-schema = { path = "crates/steprs-schema" }
+steprs-topology = { path = "crates/steprs-topology" }
+steprs-features = { path = "crates/steprs-features" }
+steprs-path = { path = "crates/steprs-path" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+
+[profile.release.package.steprs-wasm]
+opt-level = "s"

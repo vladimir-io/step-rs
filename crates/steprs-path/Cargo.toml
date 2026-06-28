@@ -1,0 +1,19 @@
+[package]
+name = "steprs-path"
+description = "G-code emission from recognized manufacturing features"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+steprs-core.workspace = true
+steprs-features.workspace = true
+steprs-schema.workspace = true
+steprs-topology.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+steprs-features.workspace = true
+steprs-core.workspace = true
+steprs-schema.workspace = true
+steprs-topology.workspace = true

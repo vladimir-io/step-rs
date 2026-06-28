@@ -1,0 +1,12 @@
+[package]
+name = "steprs-topology"
+description = "B-rep topology assembly from STEP records"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+steprs-core.workspace = true
+steprs-schema.workspace = true
+serde.workspace = true
+smallvec.workspace = true
