@@ -4,7 +4,7 @@ use steprs_schema::{extract_mesh_scaled, SchemaCache, TessellationMesh, Vec3};
 use steprs_topology::{BRepModel, SurfaceKind};
 
 use crate::model::FeatureModel;
-use crate::tessellate::tessellate_brep_faces;
+use crate::tessellate::push_stock_box_mesh;
 
 /// Lightweight analytic preview mesh for the browser (no tessellation kernel).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -51,18 +51,21 @@ pub fn build_scene_preview(
     store: &RecordStore,
     cache: &SchemaCache,
 ) -> ScenePreview {
-    let mut mesh = extract_mesh_scaled(store, cache.length_scale);
-    if mesh.vertices.is_empty() {
-        mesh = tessellate_brep_faces(brep, features);
-    }
+    let native = extract_mesh_scaled(store, cache.length_scale);
     let mut scene = ScenePreview {
-        mesh,
+        mesh: native,
         ..ScenePreview::default()
     };
     let mut min = [f64::INFINITY; 3];
     let mut max = [f64::NEG_INFINITY; 3];
 
     for face in &brep.faces {
+        if let Some(p) = face.plane_point {
+            extend_bounds_point(&mut min, &mut max, v3(p));
+        }
+        if let (Some(o), Some(r)) = (face.axis_origin, face.radius) {
+            extend_bounds_sphere(&mut min, &mut max, v3(o), r);
+        }
         match face.surface_kind {
             SurfaceKind::Cylinder => {
                 if let (Some(o), Some(a), Some(r)) =
@@ -117,10 +120,16 @@ pub fn build_scene_preview(
         scene.bounds.min = min;
         scene.bounds.max = max;
         let pad = 5.0;
-        scene.stock = Some(StockBox {
+        let stock = StockBox {
             min: [min[0] - pad, min[1] - pad, min[2] - pad],
             max: [max[0] + pad, max[1] + pad, max[2] + pad],
-        });
+        };
+        if scene.mesh.vertices.is_empty() {
+            let mut mesh = TessellationMesh::default();
+            push_stock_box_mesh(&mut mesh, stock.min, stock.max);
+            scene.mesh = mesh;
+        }
+        scene.stock = Some(stock);
     }
 
     scene
@@ -162,5 +171,12 @@ fn extend_bounds_point(min: &mut [f64; 3], max: &mut [f64; 3], p: [f64; 3]) {
     for i in 0..3 {
         min[i] = min[i].min(p[i]);
         max[i] = max[i].max(p[i]);
+    }
+}
+
+fn extend_bounds_sphere(min: &mut [f64; 3], max: &mut [f64; 3], center: [f64; 3], radius: f64) {
+    for i in 0..3 {
+        min[i] = min[i].min(center[i] - radius);
+        max[i] = max[i].max(center[i] + radius);
     }
 }

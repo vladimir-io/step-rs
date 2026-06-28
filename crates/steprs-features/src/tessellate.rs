@@ -13,10 +13,10 @@ const TORUS_U: u32 = 32;
 const TORUS_V: u32 = 16;
 
 /// Analytic B-rep tessellation when STEP carries no native triangles.
+/// Planes are omitted — full-scene plane patches read as overlapping sheets in the viewer.
 pub fn tessellate_brep_faces(brep: &BRepModel, features: &FeatureModel) -> TessellationMesh {
     let mut mesh = TessellationMesh::default();
     let mut seen = HashSet::new();
-    let (bounds_min, bounds_max) = scene_bounds(brep);
 
     for face in &brep.faces {
         if !seen.insert(face.id) {
@@ -38,11 +38,7 @@ pub fn tessellate_brep_faces(brep: &BRepModel, features: &FeatureModel) -> Tesse
                     );
                 }
             }
-            SurfaceKind::Plane => {
-                if let (Some(p), Some(n)) = (face.plane_point, face.plane_normal) {
-                    push_plane_patch(&mut mesh, p, n, bounds_min, bounds_max, PLANE_SUBDIV);
-                }
-            }
+            SurfaceKind::Plane => {}
             SurfaceKind::Cone => {
                 if let (Some(o), Some(a), Some(r), Some(angle)) = (
                     face.axis_origin,
@@ -86,6 +82,34 @@ pub fn tessellate_brep_faces(brep: &BRepModel, features: &FeatureModel) -> Tesse
     mesh
 }
 
+/// Solid stock envelope for browser preview when STEP has no native tessellation.
+pub fn push_stock_box_mesh(mesh: &mut TessellationMesh, min: [f64; 3], max: [f64; 3]) {
+    let mn = [min[0] as f32, min[1] as f32, min[2] as f32];
+    let mx = [max[0] as f32, max[1] as f32, max[2] as f32];
+    let base = mesh.vertices.len() as u32;
+    mesh.vertices.extend_from_slice(&[
+        [mn[0], mn[1], mn[2]],
+        [mx[0], mn[1], mn[2]],
+        [mx[0], mx[1], mn[2]],
+        [mn[0], mx[1], mn[2]],
+        [mn[0], mn[1], mx[2]],
+        [mx[0], mn[1], mx[2]],
+        [mx[0], mx[1], mx[2]],
+        [mn[0], mx[1], mx[2]],
+    ]);
+    for face in [
+        [4, 5, 6, 4, 6, 7],
+        [0, 2, 1, 0, 3, 2],
+        [1, 5, 4, 1, 4, 0],
+        [2, 6, 5, 2, 5, 1],
+        [3, 7, 6, 3, 6, 2],
+        [0, 4, 7, 0, 7, 3],
+    ] {
+        mesh.indices.extend(face.iter().map(|i| base + i));
+    }
+}
+
+#[allow(dead_code)]
 fn scene_bounds(brep: &BRepModel) -> ([f64; 3], [f64; 3]) {
     let mut min = [f64::INFINITY; 3];
     let mut max = [f64::NEG_INFINITY; 3];
@@ -123,6 +147,7 @@ fn cylinder_height_for_face(face_id: u32, features: &FeatureModel, radius: f64) 
     (radius * 3.0).max(8.0)
 }
 
+#[allow(dead_code)]
 fn push_plane_patch(
     mesh: &mut TessellationMesh,
     origin: steprs_schema::Vec3,

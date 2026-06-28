@@ -238,6 +238,24 @@ export function createViewer3d(canvas) {
     return geo;
   }
 
+  function addStockBox(stock, t, partBox) {
+    const mn = stock?.min;
+    const mx = stock?.max;
+    if (!mn || !mx) return;
+    const min = stepToThree(mn[0], mn[1], mn[2]);
+    const max = stepToThree(mx[0], mx[1], mx[2]);
+    const size = new THREE.Vector3().subVectors(max, min);
+    if (size.x <= 0 || size.y <= 0 || size.z <= 0) return;
+    const center = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
+    const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const box = new THREE.Mesh(geo, partMaterial(t));
+    box.position.copy(center);
+    box.castShadow = true;
+    box.receiveShadow = true;
+    partGroup.add(box);
+    partBox.expandByObject(box);
+  }
+
   function addAnalyticFallback(preview, t, partBox) {
     for (const c of preview?.cylinders || []) {
       if (!isVec3(c.axis) || !isVec3(c.origin) || !Number.isFinite(c.radius) || c.radius <= 0) continue;
@@ -364,6 +382,8 @@ export function createViewer3d(canvas) {
         partGroup.add(solid);
         partBox.expandByObject(solid);
       }
+    } else if (preview?.stock) {
+      addStockBox(preview.stock, t, partBox);
     } else {
       addAnalyticFallback(preview, t, partBox);
     }

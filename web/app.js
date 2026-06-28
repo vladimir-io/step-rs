@@ -212,16 +212,8 @@ function renderCoaxialTable(data) {
 function renderDiagnostics(data) {
   const el = $("diag-out");
   if (!el) return;
-  const s = data.stats;
-  const lines = [];
-  if (s.parse_errors > 0) lines.push(`${s.parse_errors} entities skipped during parse`);
-  if (!lines.length) {
-    el.classList.add("hidden");
-    el.innerHTML = "";
-    return;
-  }
-  el.classList.remove("hidden");
-  el.innerHTML = lines.map((l) => `<span class="diag-line">${escapeHtml(l)}</span>`).join("");
+  el.classList.add("hidden");
+  el.innerHTML = "";
 }
 
 function renderMetrics(data) {
@@ -473,7 +465,9 @@ async function analyzeText(text, name, size) {
 
     const coaxial = lastData.coaxial_holes?.length ?? 0;
     const unit = lastData.stats?.length_unit ?? "mm";
-    $("file-meta").textContent = `${truncateName(name, 48)} · ${formatBytes(size)} · ${ms} ms · ${coaxial} coaxial · ${unit}`;
+    const skips = lastData.stats?.parse_errors ?? 0;
+    const skipNote = skips > 0 ? ` · ${skips} parse skips` : "";
+    $("file-meta").textContent = `${truncateName(name, 48)} · ${formatBytes(size)} · ${ms} ms · ${coaxial} coaxial · ${unit}${skipNote}`;
     setMessage("");
   } catch (e) {
     if (gen !== analyzeGen) return;
