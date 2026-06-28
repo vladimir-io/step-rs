@@ -30,6 +30,7 @@ function assert(cond, msg) {
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  page.setDefaultTimeout(TIMEOUT);
   const errors = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (msg) => {
@@ -37,31 +38,23 @@ async function main() {
   });
 
   try {
-    await page.goto(`${BASE}/index.html`, { waitUntil: "networkidle", timeout: TIMEOUT });
+    await page.goto(`${BASE}/index.html`, { waitUntil: "networkidle" });
 
     for (const id of REQUIRED_IDS) {
       assert(await page.locator(`#${id}`).count(), `Missing #${id}`);
     }
 
     // WASM ready
-    await page.waitForFunction(
-      () => !document.getElementById("message")?.textContent?.includes("make wasm"),
-      { timeout: TIMEOUT }
+    await page.waitForFunction(() =>
+      !document.getElementById("message")?.textContent?.includes("make wasm")
     );
 
     await page.click('[data-sample="cylinder_block.step"]');
+    await page.waitForFunction(() => document.body.classList.contains("has-results"));
     await page.waitForFunction(
-      () => document.body.classList.contains("has-results"),
-      { timeout: TIMEOUT }
+      () => (document.querySelector("#code-out code")?.textContent?.length ?? 0) > 100
     );
-    await page.waitForFunction(
-      () => (document.querySelector("#code-out code")?.textContent?.length ?? 0) > 100,
-      { timeout: TIMEOUT }
-    );
-    await page.waitForFunction(
-      () => document.getElementById("m-nc")?.textContent === "Pass",
-      { timeout: TIMEOUT }
-    );
+    await page.waitForFunction(() => document.getElementById("m-nc")?.textContent === "Pass");
 
     // Layout: workspace must fill most of viewport (grid bug regression)
     const layout = await page.evaluate(() => {
