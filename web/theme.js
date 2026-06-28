@@ -1,3 +1,6 @@
+import { prefersReducedMotion } from "./motion.js";
+import { animateThemeToggle } from "./microinteractions.js";
+
 const STORAGE_KEY = "steprs-theme";
 
 export function getTheme() {
@@ -6,8 +9,7 @@ export function getTheme() {
     : "dark";
 }
 
-export function setTheme(theme) {
-  const next = theme === "light" ? "light" : "dark";
+function applyTheme(next) {
   document.documentElement.setAttribute("data-theme", next);
   try {
     localStorage.setItem(STORAGE_KEY, next);
@@ -16,22 +18,43 @@ export function setTheme(theme) {
   }
   document.querySelector('meta[name="theme-color"]')?.setAttribute(
     "content",
-    next === "light" ? "#fafafa" : "#0c0c0e"
+    next === "light" ? "#f5f7fc" : "#06060a"
   );
   window.dispatchEvent(new CustomEvent("steprs-theme", { detail: next }));
 }
 
-export function toggleTheme() {
+export function setTheme(theme) {
+  const next = theme === "light" ? "light" : "dark";
+  if (next === getTheme()) return;
+
+  const reduced = prefersReducedMotion();
+  const root = document.documentElement;
+  const commit = () => applyTheme(next);
+
+  if (!reduced && document.startViewTransition) {
+    document.startViewTransition(commit);
+    return;
+  }
+
+  if (!reduced) {
+    root.classList.add("theme-transitioning");
+    commit();
+    window.setTimeout(() => root.classList.remove("theme-transitioning"), 480);
+    return;
+  }
+
+  commit();
+}
+
+export function toggleTheme(btn) {
   setTheme(getTheme() === "light" ? "dark" : "light");
+  if (btn) animateThemeToggle(btn);
 }
 
 export function initTheme() {
   const btn = document.getElementById("theme-toggle");
   if (btn) {
-    btn.addEventListener("click", () => {
-      toggleTheme();
-      updateThemeButton(btn);
-    });
+    btn.addEventListener("click", () => toggleTheme(btn));
     updateThemeButton(btn);
   }
   window.addEventListener("steprs-theme", () => btn && updateThemeButton(btn));
@@ -40,7 +63,7 @@ export function initTheme() {
 function updateThemeButton(btn) {
   const light = getTheme() === "light";
   btn.setAttribute("aria-label", light ? "Switch to dark mode" : "Switch to light mode");
-  btn.setAttribute("title", light ? "dark" : "light");
+  btn.setAttribute("title", light ? "Dark mode" : "Light mode");
   btn.dataset.mode = light ? "light" : "dark";
 }
 
@@ -48,6 +71,11 @@ function updateThemeButton(btn) {
 export function canvasTheme() {
   const s = getComputedStyle(document.documentElement);
   const v = (name) => s.getPropertyValue(name).trim();
+  const hex = (name, fallback) => {
+    const raw = v(name) || fallback;
+    if (raw.startsWith("#")) return parseInt(raw.slice(1), 16);
+    return parseInt(fallback.replace("#", ""), 16);
+  };
   return {
     bg: v("--canvas-bg"),
     grid: v("--canvas-grid"),
@@ -59,11 +87,11 @@ export function canvasTheme() {
     label: v("--canvas-label"),
     threeBgHex: v("--three-bg") || "#111113",
     threeFog: parseFloat(v("--three-fog")) || 0.00035,
-    threePart: parseInt(v("--three-part").replace("#", ""), 16) || 0xc8cdd4,
-    threeCut: parseInt(v("--three-cut").replace("#", ""), 16) || 0x4a9eff,
-    threeRapid: parseInt(v("--three-rapid").replace("#", ""), 16) || 0x636366,
-    threeGrid: parseInt(v("--three-grid").replace("#", ""), 16) || 0x2c2c2e,
-    threeKeyHex: parseInt(v("--three-key").replace("#", ""), 16) || 0xf5f5f7,
+    threePart: hex("--three-part", "#c8cdd4"),
+    threeCut: hex("--three-cut", "#4a9eff"),
+    threeRapid: hex("--three-rapid", "#636366"),
+    threeGrid: hex("--three-grid", "#2c2c2e"),
+    threeKeyHex: hex("--three-key", "#f5f5f7"),
   };
 }
 

@@ -24,7 +24,7 @@ const FIXTURES: &[&str] = &[
     "cylinder_block.step",
     "rectangular_pocket.step",
     "faceted_prism.step",
-    "customer_00167362.step",
+    "ap214_medium.step",
 ];
 
 /// Ground truth derived from `samples/cylinder_block.step` entity graph.

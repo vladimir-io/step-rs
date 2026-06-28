@@ -7,6 +7,16 @@ import {
 } from "./motion.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import { createViewer3d } from "./viewer3d.js";
+import { initLandingScene } from "./landing-scene.js";
+import { playLandingEntrance } from "./landing-motion.js";
+import {
+  celebrateAnalysisComplete,
+  flashMessage,
+  initMicrointeractions,
+  popSystemTestRow,
+  revealManifestPanel,
+  toggleIpMaskDelight,
+} from "./microinteractions.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -14,7 +24,7 @@ const FLOW_SECTIONS = () => [$("workspace")];
 
 const SAMPLES = {
   "cylinder_block.step": "./samples/cylinder_block.step",
-  "customer_00167362.step": "./samples/customer_00167362.step",
+  "ap214_medium.step": "./samples/ap214_medium.step",
 };
 
 let wasm;
@@ -29,6 +39,7 @@ let ipMaskingEnabled = false;
 
 const progress = createProgressDriver($("progress-bar"), $("progress"));
 const viewer3d = createViewer3d($("canvas-3d"));
+let landingScene = null;
 
 const PHASE_WEIGHTS = {
   data_scan: [0, 65],
@@ -48,6 +59,16 @@ function mapProgress(phase, done, total) {
 
 function initPageEntrance() {
   document.body.classList.add("is-ready");
+  const canvas = $("landing-canvas");
+  if (canvas && !document.body.classList.contains("has-results")) {
+    landingScene = initLandingScene(canvas);
+    playLandingEntrance();
+  }
+}
+
+function stopLandingScene() {
+  landingScene?.destroy();
+  landingScene = null;
 }
 
 async function initWasm() {
@@ -67,9 +88,8 @@ async function initWasm() {
       worker.postMessage({ id: 0, type: "init" });
     });
     await runSystemTests();
-  } catch (e) {
+  } catch {
     setMessage("make wasm", true);
-    console.warn(e);
   }
 }
 
@@ -106,6 +126,7 @@ function setMessage(text, isError = false) {
   el.textContent = text;
   el.classList.toggle("error", isError);
   el.classList.toggle("hidden", !text);
+  if (text) flashMessage(el, isError);
 }
 
 function escapeHtml(s) {
@@ -227,15 +248,21 @@ async function animateMetrics(data) {
 function renderSystemTestLists(cases) {
   const html = cases
     .map((c) => {
-      const cls = c.pass ? "pass" : "fail";
-      const mark = c.pass ? "✓" : "✗";
+      const cls = c.pass ? "pass" : c.pass === false ? "fail" : "pending";
+      const mark = c.pass ? "✓" : c.pass === false ? "✗" : "…";
       return `<li class="system-test-row ${cls}"><span class="system-test-mark">${mark}</span><span class="system-test-name">${escapeHtml(c.name)}</span><span class="system-test-detail">${escapeHtml(c.detail)}</span></li>`;
     })
     .join("");
 
   for (const id of ["system-tests-list", "system-tests-landing-list"]) {
     const el = $(id);
-    if (el) el.innerHTML = html;
+    if (!el) continue;
+    const prev = new Set([...el.querySelectorAll(".system-test-row.pass")].map((r) => r.querySelector(".system-test-name")?.textContent));
+    el.innerHTML = html;
+    [...el.querySelectorAll(".system-test-row")].forEach((row) => {
+      const name = row.querySelector(".system-test-name")?.textContent;
+      if (row.classList.contains("pass") && !prev.has(name)) popSystemTestRow(row);
+    });
   }
 }
 
@@ -251,7 +278,7 @@ async function runSystemTests() {
   }
 
   renderSystemTestLists(
-    cases.concat([{ name: "customer suite", pass: false, detail: "running…" }])
+    cases.concat([{ name: "AP214 fixtures", pass: false, detail: "running…" }])
   );
 
   try {
@@ -270,7 +297,7 @@ async function runSystemTests() {
       renderSystemTestLists(cases);
     }
   } catch (e) {
-    cases.push({ name: "customer suite", pass: false, detail: String(e) });
+    cases.push({ name: "AP214 fixtures", pass: false, detail: String(e) });
   }
 
   systemTestsDone = true;
@@ -300,6 +327,7 @@ function refreshManifestPreview() {
   const text = JSON.stringify(lastData.structural_summary, null, 2);
   pre.textContent = text;
   if (copyBtn) copyBtn.disabled = false;
+  revealManifestPanel(panel);
 }
 
 function initIpMaskToggle() {
@@ -313,6 +341,7 @@ function initIpMaskToggle() {
   }
   toggle.addEventListener("change", () => {
     ipMaskingEnabled = toggle.checked;
+    toggleIpMaskDelight(toggle);
     try {
       localStorage.setItem("steprs-ip-mask", ipMaskingEnabled ? "1" : "0");
     } catch {
@@ -383,6 +412,7 @@ async function presentResults(data) {
   renderDiagnostics(data);
   renderCoaxialTable(data);
   refreshManifestPreview();
+  celebrateAnalysisComplete();
   requestAnimationFrame(() => {
     viewer3d.load(data);
     viewer3d.resize?.();
@@ -402,7 +432,25 @@ if (typeof ResizeObserver !== "undefined") {
   if (viz) ro.observe(viz);
   if (stage) ro.observe(stage);
 }
-onThemeChange(() => onLayoutChange());
+onThemeChange(() => {
+  onLayoutChange();
+  landingScene?.applyTheme?.();
+});
+
+const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
+
+function isStepText(text) {
+  return text.includes("ISO-10303") || text.includes("DATA;");
+}
+
+async function loadSample(name) {
+  const url = SAMPLES[name] ?? `./samples/${name}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sample not found (${res.status})`);
+  const text = await res.text();
+  if (!isStepText(text)) throw new Error("Sample file is not valid STEP Part 21");
+  await analyzeText(text, name, text.length);
+}
 
 async function analyzeText(text, name, size) {
   if (!wasm) {
@@ -411,6 +459,7 @@ async function analyzeText(text, name, size) {
   }
 
   const gen = ++analyzeGen;
+  stopLandingScene();
   if (!document.body.classList.contains("has-results")) {
     await collapseSections(FLOW_SECTIONS());
   }
@@ -493,6 +542,7 @@ $("copy-manifest")?.addEventListener("click", async () => {
 
 initTheme();
 initPageEntrance();
+initMicrointeractions();
 initIpMaskToggle();
 
 function openFilePicker() {
@@ -503,14 +553,33 @@ function openFilePicker() {
 }
 
 async function processFile(file) {
-  const text = await file.text();
+  if (!file) return;
+  if (file.size === 0) {
+    setMessage("Empty file — drop a valid STEP (.step, .stp, .p21)", true);
+    return;
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    setMessage("File exceeds 120 MB limit", true);
+    return;
+  }
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    setMessage("Could not read file", true);
+    return;
+  }
+  if (!isStepText(text)) {
+    setMessage("Not a STEP Part 21 file (missing ISO-10303-21 header)", true);
+    return;
+  }
   await analyzeText(text, file.name, file.size);
 }
 
 function bindDropTarget(el) {
   if (!el) return;
   el.addEventListener("click", (e) => {
-    if (e.target.closest(".sample-chip, .landing-dock, #landing-cta, button, a, input")) return;
+    if (e.target.closest(".sample-chip, .landing-dock, .landing-drop-wrap, .landing-sample-cta, #landing-cta, #try-sample, button, a, input")) return;
     openFilePicker();
   });
   el.addEventListener("keydown", (e) => {
@@ -546,16 +615,13 @@ $("file-input")?.addEventListener("change", () => {
   if (f) processFile(f);
 });
 
-document.querySelectorAll(".sample-chip").forEach((btn) => {
+document.querySelectorAll(".sample-chip, .landing-sample-cta").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
     e.stopPropagation();
     const name = btn.dataset.sample;
-    const url = SAMPLES[name] ?? `./samples/${name}`;
+    if (!name) return;
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Sample not found (${res.status})`);
-      const text = await res.text();
-      await analyzeText(text, name, text.length);
+      await loadSample(name);
     } catch (err) {
       setMessage(String(err), true);
     }

@@ -1,8 +1,8 @@
 use steprs::analyze_step;
 
 #[test]
-fn customer_metre_file_scales_to_mm() {
-    let content = include_str!("../../../samples/customer_00167362.step");
+fn ap214_metre_units_scales_to_mm() {
+    let content = include_str!("../../../samples/ap214_medium.step");
     let result = analyze_step(content).expect("analyze");
     assert!(
         (result.length_scale - 1000.0).abs() < f64::EPSILON,

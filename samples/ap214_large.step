@@ -1,7 +1,7 @@
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION( ( '' ), ' ' );
-FILE_NAME( '/vol/tmp/translate-1001591499449388370/5ae4a874d143df0fcf305535.step', '2018-04-28T16:59:33', ( '' ), ( '' ), ' ', ' ', ' ' );
+FILE_NAME('ap214_large.step','2026-06-03T12:00:00',('steprs'),('steprs.dev'),'steprs','steprs','');
 FILE_SCHEMA( ( 'AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }' ) );
 ENDSEC;
 DATA;

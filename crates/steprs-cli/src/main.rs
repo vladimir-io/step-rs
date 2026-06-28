@@ -28,7 +28,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Run cylinder_block + customer regression checks
+    /// Run cylinder_block + AP214 fixture regression checks
     Test,
     /// List supported manufacturing feature kinds
     Catalog,

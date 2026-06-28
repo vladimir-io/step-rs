@@ -8,7 +8,7 @@ fn parses_ref_list_param() {
 }
 
 #[test]
-fn parses_customer_param_list() {
+fn parses_ap214_param_list() {
     let inner = " ' ', ( #10, #11, #12 ), #6 ";
     let (rest, params) = parse_parameter_list(inner).expect("params");
     assert_eq!(params.len(), 3, "rest: {rest}");
@@ -16,7 +16,7 @@ fn parses_customer_param_list() {
 }
 
 #[test]
-fn parses_customer_entity_one() {
+fn parses_ap214_entity_one() {
     let line = "#1 = MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION( ' ', ( #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33 ), #6 );";
     let (rest, inst) = entity_instance(line).expect("entity #1");
     assert!(rest.trim().is_empty());
@@ -24,7 +24,7 @@ fn parses_customer_entity_one() {
 }
 
 #[test]
-fn parses_customer_complex_six() {
+fn parses_ap214_complex_entity_six() {
     let line = "#6 =  ( GEOMETRIC_REPRESENTATION_CONTEXT( 3 )GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT( ( #41 ) )GLOBAL_UNIT_ASSIGNED_CONTEXT( ( #43, #44, #45 ) )REPRESENTATION_CONTEXT( 'NONE', 'WORKSPACE' ) );";
     let (rest, inst) = entity_instance(line).expect("entity #6");
     assert!(rest.trim().is_empty());
@@ -32,9 +32,9 @@ fn parses_customer_complex_six() {
 }
 
 #[test]
-fn parses_customer_header_and_data() {
-    let content = include_str!("../../../samples/customer_00180964.step");
-    let store = parse_step_file(content).expect("customer sample");
+fn parses_ap214_fixture_header_and_data() {
+    let content = include_str!("../../../samples/ap214_compact.step");
+    let store = parse_step_file(content).expect("ap214 fixture");
     assert!(
         store.record_count() > 500,
         "records: {}",

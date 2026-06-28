@@ -1,4 +1,4 @@
-//! Shared regression checks for cylinder_block and customer AP214 samples.
+//! Shared regression checks for synthetic fixtures and AP214 export samples.
 
 use serde::{Deserialize, Serialize};
 use steprs_core::parse_step_file;
@@ -43,31 +43,31 @@ pub fn cylinder_block_spec() -> SampleExpect {
     }
 }
 
-pub fn customer_regression_specs() -> Vec<SampleExpect> {
+pub fn ap214_regression_specs() -> Vec<SampleExpect> {
     vec![
         SampleExpect {
-            name: "customer_00167362.step".into(),
+            name: "ap214_medium.step".into(),
             min_records: 1800,
             min_faces: 40,
             protocol: "AP214".into(),
             require_coaxial_cluster: false,
         },
         SampleExpect {
-            name: "customer_00013700.step".into(),
+            name: "ap214_large.step".into(),
             min_records: 11_000,
             min_faces: 150,
             protocol: "AP214".into(),
             require_coaxial_cluster: false,
         },
         SampleExpect {
-            name: "customer_00180964.step".into(),
+            name: "ap214_compact.step".into(),
             min_records: 700,
             min_faces: 20,
             protocol: "AP214".into(),
             require_coaxial_cluster: false,
         },
         SampleExpect {
-            name: "customer_00144025.step".into(),
+            name: "ap214_standard.step".into(),
             min_records: 1500,
             min_faces: 30,
             protocol: "AP214".into(),
@@ -158,8 +158,8 @@ pub fn run_cylinder_block_regression() -> VerifyResult {
     verify_sample(content, &cylinder_block_spec())
 }
 
-pub fn run_customer_regression() -> Vec<VerifyResult> {
-    customer_regression_specs()
+pub fn run_ap214_regression() -> Vec<VerifyResult> {
+    ap214_regression_specs()
         .iter()
         .map(|spec| {
             let path = format!("{}/../../samples/{}", env!("CARGO_MANIFEST_DIR"), spec.name);
@@ -172,12 +172,12 @@ pub fn run_customer_regression() -> Vec<VerifyResult> {
 
 pub fn run_system_tests() -> SystemTestStatus {
     let mut cases = vec![run_cylinder_block_regression()];
-    cases.extend(run_customer_regression());
+    cases.extend(run_ap214_regression());
     let all_pass = cases.iter().all(|c| c.pass);
     SystemTestStatus { all_pass, cases }
 }
 
-/// Specs for browser-side customer regression (fetch + verify).
-pub fn customer_specs_json() -> Result<String, serde_json::Error> {
-    serde_json::to_string(&customer_regression_specs())
+/// Specs for browser-side AP214 regression (fetch + verify).
+pub fn ap214_specs_json() -> Result<String, serde_json::Error> {
+    serde_json::to_string(&ap214_regression_specs())
 }

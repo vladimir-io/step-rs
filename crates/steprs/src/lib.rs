@@ -4,7 +4,7 @@ mod regression;
 mod web;
 
 pub use regression::{
-    customer_regression_specs, cylinder_block_spec, run_customer_regression,
+    ap214_regression_specs, cylinder_block_spec, run_ap214_regression,
     run_cylinder_block_regression, run_system_tests, verify_sample, SampleExpect, SystemTestStatus,
     VerifyResult,
 };
@@ -132,7 +132,7 @@ pub fn parse_only(content: &str) -> Result<ParseStats, steprs_core::ParseError> 
     Ok(parse_stats(&store))
 }
 
-/// JSON array of customer regression `SampleExpect` specs for browser verification.
+/// JSON array of AP214 regression `SampleExpect` specs for browser verification.
 pub fn regression_specs_json() -> Result<String, serde_json::Error> {
-    regression::customer_specs_json()
+    regression::ap214_specs_json()
 }
