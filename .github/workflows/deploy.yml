@@ -32,15 +32,17 @@ jobs:
       - name: Build WASM
         run: make wasm
 
-      - name: Stage samples for static hosting
+      - name: Stage static site
         run: |
           rm -f web/samples
           cp -r samples web/samples
+          mkdir -p site
+          rsync -a web/ site/ --exclude node_modules
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: site
 
   deploy:
     needs: build
