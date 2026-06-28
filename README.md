@@ -68,7 +68,7 @@ make test-web             # WASM build + browser E2E smoke test
 wasm.analyzeStepOptions(text, JSON.stringify({
   emit_gcode: true,
   simulate_stock: true,
-  post: { processor: "grbl", wcs: "g54" }
+  post: { processor: "grbl", wcs: "G54" }
 }));
 ```
 

@@ -78,7 +78,7 @@ function buildOptions() {
     },
     post: {
       processor: post,
-      wcs: "g54",
+      wcs: "G54",
       program_number: 1000,
       line_numbers: true,
       tool_number: 1,
