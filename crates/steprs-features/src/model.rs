@@ -31,6 +31,12 @@ pub struct ManufacturingFeature {
     pub length: Option<f64>,
     pub pocket: Option<PocketProfile>,
     pub confidence: f32,
+    /// Per-segment diameters along a coaxial cluster (mm), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment_diameters_mm: Option<Vec<f64>>,
+    /// Per-segment axial depths (mm), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment_depths_mm: Option<Vec<f64>>,
 }
 
 /// Planar pocket boundary in world coordinates with face-local UV axes.

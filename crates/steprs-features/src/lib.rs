@@ -1,9 +1,14 @@
+mod anonymizer;
 mod detect;
 mod geom;
 mod model;
 pub mod preview;
 mod tessellate;
 
+pub use anonymizer::{
+    anonymize_coaxial_holes, anonymize_manufacturing_features, anonymize_to_json,
+    AnonymizedFeatureEntry, ClassificationQuantities, StructuralSummary,
+};
 pub use detect::{detect_coaxial_holes, detect_isolated_cylinders, detect_planar_pockets};
 pub use model::{FeatureModel, FeatureSummary, ManufacturingFeature, PocketProfile};
 pub use preview::{build_scene_preview, ScenePreview};

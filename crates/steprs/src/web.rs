@@ -1,8 +1,7 @@
-//! Slim analysis payload for browser / WASM — omits heavy registry blobs.
+//! Slim analysis payload for browser / WASM — coaxial holes and B-rep summary only.
 
 use serde::Serialize;
-use steprs_features::{FeatureModel, ScenePreview};
-use steprs_path::{GCodeValidation, StockSimulation, ToolpathProgram};
+use steprs_features::{ManufacturingFeature, ScenePreview, StructuralSummary};
 use steprs_schema::{unit_label, EntityRegistry, TessellationMesh};
 
 use crate::{AnalysisResult, BRepSummary};
@@ -11,13 +10,10 @@ use crate::{AnalysisResult, BRepSummary};
 pub struct WebAnalysisResult {
     pub stats: WebParseStats,
     pub brep: BRepSummary,
-    pub features: FeatureModel,
+    pub coaxial_holes: Vec<ManufacturingFeature>,
+    pub structural_summary: StructuralSummary,
     pub mesh: TessellationMesh,
     pub preview: ScenePreview,
-    pub toolpath: Option<ToolpathProgram>,
-    pub stock_simulation: Option<StockSimulation>,
-    pub gcode: Option<String>,
-    pub gcode_validation: Option<GCodeValidation>,
     pub registry_summary: RegistrySummary,
 }
 
@@ -51,13 +47,10 @@ impl From<&AnalysisResult> for WebAnalysisResult {
         Self {
             stats: WebParseStats::from_result(r),
             brep: r.brep.clone(),
-            features: r.features.clone(),
+            coaxial_holes: r.coaxial_holes.clone(),
+            structural_summary: r.structural_summary.clone(),
             mesh: r.mesh.clone(),
             preview: r.preview.clone(),
-            toolpath: r.toolpath.clone(),
-            stock_simulation: r.stock_simulation.as_ref().map(downsample_stock),
-            gcode: r.gcode.clone(),
-            gcode_validation: r.gcode_validation.clone(),
             registry_summary: RegistrySummary::from(&r.registry),
         }
     }
@@ -94,41 +87,5 @@ impl RegistrySummary {
             unknown_entity_types: r.unknown_top.len(),
             ap242_entity_kinds: r.ap242_entities_seen.len(),
         }
-    }
-}
-
-/// Cap stock heatmap resolution for WASM transfer (full grid used in sim math).
-fn downsample_stock(sim: &StockSimulation) -> StockSimulation {
-    const MAX: u32 = 256;
-    let nx = sim.grid_nx;
-    let ny = sim.grid_ny;
-    if nx <= MAX && ny <= MAX {
-        return sim.clone();
-    }
-
-    let step_x = (nx as f64 / MAX as f64).ceil() as u32;
-    let step_y = (ny as f64 / MAX as f64).ceil() as u32;
-    let out_nx = (nx + step_x - 1) / step_x;
-    let out_ny = (ny + step_y - 1) / step_y;
-    let mut out = Vec::with_capacity((out_nx * out_ny) as usize);
-
-    for oy in 0..out_ny {
-        for ox in 0..out_nx {
-            let ix = (ox * step_x).min(nx - 1);
-            let iy = (oy * step_y).min(ny - 1);
-            out.push(sim.remaining_height[(iy * nx + ix) as usize]);
-        }
-    }
-
-    StockSimulation {
-        grid_nx: out_nx,
-        grid_ny: out_ny,
-        bounds_min: sim.bounds_min,
-        bounds_max: sim.bounds_max,
-        remaining_height: out,
-        removed_volume_mm3: sim.removed_volume_mm3,
-        collision_cells: sim.collision_cells,
-        gouge_cells: sim.gouge_cells,
-        overcut_cells: sim.overcut_cells,
     }
 }

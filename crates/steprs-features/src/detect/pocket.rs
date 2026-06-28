@@ -105,6 +105,8 @@ pub fn detect_planar_pockets(
                     normal: [normal.x, normal.y, normal.z],
                 }),
                 confidence,
+                segment_diameters_mm: None,
+                segment_depths_mm: None,
             });
         }
     }

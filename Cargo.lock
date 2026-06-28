@@ -304,7 +304,6 @@ dependencies = [
  "serde_json",
  "steprs-core",
  "steprs-features",
- "steprs-path",
  "steprs-schema",
  "steprs-topology",
  "thiserror",
@@ -336,20 +335,9 @@ name = "steprs-features"
 version = "1.0.0"
 dependencies = [
  "serde",
+ "serde_json",
  "smallvec",
  "steprs-core",
- "steprs-schema",
- "steprs-topology",
-]
-
-[[package]]
-name = "steprs-path"
-version = "1.0.0"
-dependencies = [
- "serde",
- "serde_json",
- "steprs-core",
- "steprs-features",
  "steprs-schema",
  "steprs-topology",
 ]

@@ -1,11 +1,10 @@
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
-use steprs::path::{PostOptions, PostProcessor};
-use steprs::{analyze_step, parse_only, PipelineOptions};
+use steprs::{analyze_step, parse_only, run_system_tests};
 
 #[derive(Parser)]
-#[command(name = "steprs", version, about = "STEP file analyzer — steprs.dev")]
+#[command(name = "steprs", version, about = "STEP B-rep coaxial hole extractor — steprs.dev")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -19,18 +18,14 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Full STEP → features → toolpath → G-code pipeline
+    /// STEP → B-rep → coaxial hole detection
     Analyze {
         path: PathBuf,
         #[arg(long)]
         json: bool,
-        #[arg(long)]
-        gcode: Option<PathBuf>,
-        #[arg(long)]
-        no_gcode: bool,
-        #[arg(long, default_value = "fanuc")]
-        post: String,
     },
+    /// Run cylinder_block + customer regression checks
+    Test,
     /// List supported manufacturing feature kinds
     Catalog,
 }
@@ -45,6 +40,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  • {} ({:?})", kind.label(), kind);
             }
         }
+        Commands::Test => {
+            let status = run_system_tests();
+            for case in &status.cases {
+                let mark = if case.pass { "PASS" } else { "FAIL" };
+                println!("{mark}  {} — {}", case.name, case.detail);
+            }
+            if !status.all_pass {
+                std::process::exit(1);
+            }
+        }
         Commands::Inspect { path, json } => {
             let content = fs::read_to_string(&path)?;
             let stats = parse_only(&content)?;
@@ -54,42 +59,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 print_stats(&stats);
             }
         }
-        Commands::Analyze {
-            path,
-            json,
-            gcode,
-            no_gcode,
-            post,
-        } => {
+        Commands::Analyze { path, json } => {
             let content = fs::read_to_string(&path)?;
-            let processor = match post.as_str() {
-                "haas" => PostProcessor::Haas,
-                "grbl" => PostProcessor::Grbl,
-                "iso" => PostProcessor::Iso,
-                _ => PostProcessor::Fanuc,
-            };
-            let options = PipelineOptions {
-                emit_gcode: !no_gcode,
-                post: PostOptions {
-                    processor,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-
-            let result = analyze_step(&content, &options)?;
+            let result = analyze_step(&content)?;
 
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
                 print_analysis(&result);
-            }
-
-            if let Some(out) = gcode {
-                if let Some(code) = &result.gcode {
-                    fs::write(&out, code)?;
-                    println!("\nG-code written to {}", out.display());
-                }
             }
         }
     }
@@ -118,59 +95,18 @@ fn print_analysis(result: &steprs::AnalysisResult) {
         result.brep.solid_count, result.brep.face_count, result.brep.adjacency_count
     );
     println!(
-        "Features: {} total (holes: {}, pockets: {}, bosses: {}, cylindrical: {})",
-        result.features.features.len(),
-        result.features.summary.hole_count,
-        result.features.summary.pocket_count,
-        result.features.summary.boss_count,
-        result.features.summary.cylindrical_face_count
+        "Coaxial holes: {} (detect_coaxial_holes)",
+        result.coaxial_holes.len()
     );
-    if let Some(sim) = &result.stock_simulation {
-        println!(
-            "\nStock sim: {:.0} mm³ removed · gouge: {} · overcut: {}",
-            sim.removed_volume_mm3, sim.gouge_cells, sim.overcut_cells
-        );
-    }
-
-    if let Some(tp) = &result.toolpath {
-        println!(
-            "\nToolpath: {} segments · cut {:.1} mm · rapid {:.1} mm · ~{:.2} min",
-            tp.stats.segment_count,
-            tp.stats.estimated_cut_length_mm,
-            tp.stats.estimated_rapid_length_mm,
-            tp.stats.estimated_time_min
-        );
-    }
-
-    for (i, f) in result.features.features.iter().enumerate() {
-        println!(
-            "  [{}] {} — {:?} (conf {:.0}%)",
-            i + 1,
-            f.label,
-            f.kind,
-            f.confidence * 100.0
-        );
+    for (i, f) in result.coaxial_holes.iter().enumerate() {
+        println!("  [{}] {} — {:?}", i + 1, f.label, f.kind);
         if let Some(r) = f.radius {
             println!("       radius: {r:.3} mm");
         }
         if let Some(d) = f.depth {
             println!("       depth:  {d:.3} mm");
         }
-    }
-    if let Some(v) = &result.gcode_validation {
-        println!(
-            "\nG-code validation: {}",
-            if v.valid { "PASS" } else { "FAIL" }
-        );
-        for e in &v.errors {
-            println!("  error: {e}");
-        }
-        for w in &v.warnings {
-            println!("  warn:  {w}");
-        }
-    }
-    if result.gcode.is_some() {
-        println!("\nG-code: generated (use --gcode out.nc to save)");
+        println!("       face_ids: {:?}", f.face_ids);
     }
     if result.stats.parse_errors > 0 {
         println!(

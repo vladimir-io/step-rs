@@ -10,6 +10,7 @@ steprs-core.workspace = true
 steprs-schema.workspace = true
 steprs-topology.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 smallvec.workspace = true
 
 [dev-dependencies]

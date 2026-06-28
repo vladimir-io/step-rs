@@ -1,13 +1,10 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
-import { buildHeatmapTextureData } from "./stock-sim.js";
-import { canvasTheme, getTheme, onThemeChange } from "./theme.js";
+/**
+ * Fast part preview — tessellated mesh + B-rep cylinders, orbit controls.
+ */
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { canvasTheme, onThemeChange } from "./theme.js";
 
-function hex(css) {
-  const h = css.replace("#", "").trim();
-  return parseInt(h, 16) || 0x06080c;
-}
-
-/** STEP (Z-up) → Three.js (Y-up): x stays, y↔z */
 function stepToThree(x, y, z) {
   const nx = Number(x);
   const ny = Number(y);
@@ -19,575 +16,301 @@ function stepToThree(x, y, z) {
   );
 }
 
-function isVec3(arr) {
-  return Array.isArray(arr) && arr.length >= 3 && Number.isFinite(Number(arr[0]));
+function isVec3(v) {
+  return Array.isArray(v) && v.length >= 3 && Number.isFinite(Number(v[0]));
 }
 
-function flattenMeshVerts(vertices) {
+function flattenVerts(vertices) {
   if (!vertices?.length) return null;
-  if (typeof vertices[0] === "number") return vertices;
-  const out = [];
+  if (typeof vertices[0] === "number") return Float32Array.from(vertices);
+  const out = new Float32Array(vertices.length * 3);
+  let n = 0;
   for (const v of vertices) {
     if (!isVec3(v)) continue;
-    out.push(Number(v[0]), Number(v[1]), Number(v[2]));
+    out[n++] = Number(v[0]);
+    out[n++] = Number(v[1]);
+    out[n++] = Number(v[2]);
   }
-  return out.length >= 9 ? out : null;
+  return n >= 9 ? out.subarray(0, n) : null;
 }
 
-function transformBounds(min, max) {
-  if (!isVec3(min) || !isVec3(max)) {
-    return { min: [0, 0, 0], max: [1, 1, 1] };
-  }
-  const corners = [
-    [min[0], min[1], min[2]],
-    [max[0], min[1], min[2]],
-    [max[0], max[1], min[2]],
-    [min[0], max[1], min[2]],
-    [min[0], min[1], max[2]],
-    [max[0], min[1], max[2]],
-    [max[0], max[1], max[2]],
-    [min[0], max[1], max[2]],
-  ];
-  const outMin = [Infinity, Infinity, Infinity];
-  const outMax = [-Infinity, -Infinity, -Infinity];
-  for (const [x, y, z] of corners) {
-    const v = stepToThree(x, y, z);
-    outMin[0] = Math.min(outMin[0], v.x);
-    outMin[1] = Math.min(outMin[1], v.y);
-    outMin[2] = Math.min(outMin[2], v.z);
-    outMax[0] = Math.max(outMax[0], v.x);
-    outMax[1] = Math.max(outMax[1], v.y);
-    outMax[2] = Math.max(outMax[2], v.z);
-  }
-  return { min: outMin, max: outMax };
-}
-
-function expandBoxBounds(box, min, max) {
-  box.expandByPoint(stepToThree(min[0], min[1], min[2]));
-  box.expandByPoint(stepToThree(max[0], max[1], max[2]));
+function toColor(v) {
+  if (typeof v === "number") return v;
+  const h = String(v ?? "").replace("#", "").trim();
+  return parseInt(h, 16) || 0x888888;
 }
 
 export function createViewer3d(canvas) {
+  if (!canvas) return { load() {}, resize() {}, refresh() {} };
+
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
     alpha: false,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 3));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 5000);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 50000);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.rotateSpeed = 0.65;
+  controls.panSpeed = 0.75;
+  controls.zoomSpeed = 0.9;
+  controls.minDistance = 1;
+  controls.maxDistance = 8000;
+
   const group = new THREE.Group();
   scene.add(group);
 
-  let hemi, key, fill, rim, grid, shadowPlane;
-  let animId = null;
-  let visible = true;
-  let theta = 0.55;
-  let thetaVel = 0;
-  let target = new THREE.Vector3();
-  let orbitRadius = 120;
-  let orbitTarget = 120;
-  let introT = 1;
+  const holeGroup = new THREE.Group();
+  scene.add(holeGroup);
+
+  let grid = null;
   let lastAnalysis = null;
-  let dragging = false;
-  let lastPointerX = 0;
+  let raf = 0;
+  let running = false;
 
   function applyTheme() {
     const t = canvasTheme();
-    const bg = hex(t.threeBgHex);
-    scene.background = new THREE.Color(bg);
-    scene.fog = new THREE.FogExp2(bg, t.threeFog);
-    if (hemi) {
-      hemi.color.setHex(t.threeKeyHex);
-      hemi.groundColor.setHex(bg);
-      hemi.intensity = 0.55;
-    }
+    scene.background = new THREE.Color(toColor(t.threeBgHex));
+    scene.fog = new THREE.FogExp2(toColor(t.threeBgHex), t.threeFog || 0.0004);
     if (grid) {
-      grid.material.opacity = 0.14;
-      grid.material.color.setHex(t.threeGrid);
-    }
-    if (shadowPlane) shadowPlane.material.opacity = getTheme() === "light" ? 0.08 : 0.22;
-  }
-
-  function setupLights() {
-    if (hemi) return;
-    hemi = new THREE.HemisphereLight(0xf5f5f7, 0x111113, 0.48);
-    scene.add(hemi);
-
-    key = new THREE.DirectionalLight(0xffffff, 1.05);
-    key.position.set(60, 90, 45);
-    key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    key.shadow.bias = -0.0004;
-    key.shadow.camera.near = 1;
-    key.shadow.camera.far = 500;
-    key.shadow.camera.left = -80;
-    key.shadow.camera.right = 80;
-    key.shadow.camera.top = 80;
-    key.shadow.camera.bottom = -80;
-    scene.add(key);
-
-    fill = new THREE.DirectionalLight(0xffffff, 0.28);
-    fill.position.set(-50, 30, -40);
-    scene.add(fill);
-
-    rim = new THREE.DirectionalLight(0x8ab4ff, 0.22);
-    rim.position.set(-30, 20, 70);
-    scene.add(rim);
-
-    grid = new THREE.GridHelper(200, 48, 0x2a2a2c, 0x1c1c1e);
-    grid.material.transparent = true;
-    grid.material.opacity = 0.14;
-    scene.add(grid);
-
-    const shadowGeo = new THREE.PlaneGeometry(1, 1);
-    const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false,
-    });
-    shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
-    shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.renderOrder = -1;
-    scene.add(shadowPlane);
-
-    applyTheme();
-  }
-
-  setupLights();
-  onThemeChange(() => {
-    applyTheme();
-    if (lastAnalysis) load(lastAnalysis);
-  });
-
-  const observer =
-    typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
-  if (observer) observer.observe(canvas);
-
-  document.addEventListener("visibilitychange", () => {
-    visible = !document.hidden;
-    if (visible && group.children.length) startLoop();
-    else stopLoop();
-  });
-
-  function resize() {
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    if (w === 0 || h === 0) return;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  }
-
-  function disposeObject(obj) {
-    if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) {
-      if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
-      else obj.material.dispose();
-    }
-  }
-
-  function clearGroup() {
-    stopLoop();
-    while (group.children.length) {
-      const c = group.children.pop();
-      c.traverse?.((child) => {
-        if (child.isMesh || child.isLine) disposeObject(child);
-      });
-      disposeObject(c);
-    }
-  }
-
-  function fitCamera(partBox, animateIntro = false) {
-    if (!partBox || partBox.isEmpty()) return;
-    const center = partBox.getCenter(new THREE.Vector3());
-    const size = partBox.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z, 1);
-    orbitTarget = maxDim * 1.55;
-    if (animateIntro) {
-      orbitRadius = orbitTarget * 1.35;
-      introT = 0;
-    } else {
-      orbitRadius = orbitTarget;
-      introT = 1;
-    }
-    target.copy(center);
-    camera.near = maxDim * 0.006;
-    camera.far = maxDim * 60;
-    camera.updateProjectionMatrix();
-    const floorY = partBox.min.y - 0.02;
-    if (grid) {
-      grid.position.y = floorY;
-      const gs = Math.ceil(maxDim * 2.8);
-      grid.scale.set(gs / 200, 1, gs / 200);
-    }
-    if (shadowPlane) {
-      const spread = maxDim * 1.15;
-      shadowPlane.position.set(center.x, floorY + 0.01, center.z);
-      shadowPlane.scale.set(spread, spread, 1);
-    }
-    if (key?.target) {
-      key.target.position.copy(center);
-      key.position.set(center.x + maxDim, center.y + maxDim * 1.2, center.z + maxDim * 0.6);
+      grid.material.color.setHex(toColor(t.threeGrid));
+      grid.material.opacity = 0.35;
     }
   }
 
   function partMaterial(t, opts = {}) {
     return new THREE.MeshPhysicalMaterial({
-      color: t.threePart,
+      color: toColor(t.threePart),
       metalness: opts.metalness ?? 0.42,
-      roughness: opts.roughness ?? 0.38,
-      clearcoat: 0.35,
-      clearcoatRoughness: 0.18,
-      side: THREE.DoubleSide,
-      ...opts,
+      roughness: opts.roughness ?? 0.28,
+      clearcoat: 0.15,
+      clearcoatRoughness: 0.4,
+      envMapIntensity: 0.6,
     });
   }
 
-  /** Sample in STEP coords; convert to Three at use site. */
-  function sampleSegmentStep(seg, prev) {
-    if (seg.kind === "drill") {
-      const { xy, z_safe, z_bottom } = seg;
-      if (!isVec3(xy) || !Number.isFinite(z_safe) || !Number.isFinite(z_bottom)) return [];
-      const out = [];
-      const a = [xy[0], xy[1], z_safe];
-      if (prev) out.push({ v: a, rapid: true });
-      for (let i = 1; i <= 8; i++) {
-        const t = i / 8;
-        out.push({
-          v: [xy[0], xy[1], z_safe + (z_bottom - z_safe) * t],
-          rapid: false,
-        });
-      }
-      out.push({ v: a, rapid: true });
-      return out;
-    }
-    if (seg.kind === "arc" && prev) {
-      const to = seg.to;
-      if (!isVec3(to)) return [];
-      const [i, j] = seg.center_offset ?? [0, 0];
-      const cx = prev[0] + i;
-      const cy = prev[1] + j;
-      const a0 = Math.atan2(prev[1] - cy, prev[0] - cx);
-      const a1 = Math.atan2(to[1] - cy, to[0] - cx);
-      let delta = a1 - a0;
-      if (seg.clockwise) {
-        if (delta >= 0) delta -= Math.PI * 2;
-      } else if (delta <= 0) delta += Math.PI * 2;
-      const r = Math.hypot(i, j) || 1;
-      const out = [];
-      for (let s = 1; s <= 16; s++) {
-        const t = s / 16;
-        const a = a0 + delta * t;
-        out.push({
-          v: [
-            cx + Math.cos(a) * r,
-            cy + Math.sin(a) * r,
-            prev[2] + (to[2] - prev[2]) * t,
-          ],
-          rapid: false,
-        });
-      }
-      return out;
-    }
-    const to = seg.to ?? seg.end_point;
-    if (!to) return [];
-    return [{ v: [to[0], to[1], to[2]], rapid: seg.kind === "rapid" }];
+  function holeMaterial(t) {
+    return new THREE.MeshPhysicalMaterial({
+      color: toColor(t.threeCut || "#4a9eff"),
+      metalness: 0.55,
+      roughness: 0.22,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
   }
 
-  function addStockBlock(s, t, partBox, simulation) {
-    const b = transformBounds(s.min, s.max);
-    const dx = b.max[0] - b.min[0];
-    const dy = b.max[1] - b.min[1];
-    const dz = b.max[2] - b.min[2];
-    const cx = (b.min[0] + b.max[0]) / 2;
-    const cy = (b.min[1] + b.max[1]) / 2;
-    const cz = (b.min[2] + b.max[2]) / 2;
-
-    const geo = new THREE.BoxGeometry(dx, dy, dz);
-    const solid = new THREE.Mesh(geo, partMaterial(t, { metalness: 0.08, roughness: 0.72 }));
-    solid.position.set(cx, cy, cz);
-    solid.castShadow = true;
-    solid.receiveShadow = true;
-    group.add(solid);
-    partBox.expandByObject(solid);
-
-    const edges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geo),
-      new THREE.LineBasicMaterial({
-        color: t.threeRapid,
-        transparent: true,
-        opacity: 0.35,
-      })
-    );
-    edges.position.copy(solid.position);
-    group.add(edges);
-
-    if (simulation) {
-      const light = getTheme() === "light";
-      const texData = buildHeatmapTextureData(simulation, light);
-      if (texData) {
-        const texCanvas = document.createElement("canvas");
-        texCanvas.width = texData.width;
-        texCanvas.height = texData.height;
-        const ctx = texCanvas.getContext("2d");
-        ctx.putImageData(new ImageData(texData.data, texData.width, texData.height), 0, 0);
-        const map = new THREE.CanvasTexture(texCanvas);
-        map.colorSpace = THREE.SRGBColorSpace;
-        map.minFilter = THREE.LinearFilter;
-        map.magFilter = THREE.LinearFilter;
-
-        const top = new THREE.Mesh(
-          new THREE.PlaneGeometry(dx * 0.998, dz * 0.998),
-          new THREE.MeshBasicMaterial({
-            map,
-            transparent: true,
-            opacity: 0.72,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-          })
-        );
-        top.rotation.x = -Math.PI / 2;
-        top.position.set(cx, b.max[1] + 0.08, cz);
-        group.add(top);
-      }
+  function clearGroup(g) {
+    while (g.children.length) {
+      const c = g.children.pop();
+      c.traverse?.((o) => {
+        o.geometry?.dispose();
+        if (o.material) {
+          Array.isArray(o.material) ? o.material.forEach((m) => m.dispose()) : o.material.dispose();
+        }
+      });
     }
-    geo.dispose();
   }
 
-  function load(analysis) {
-    try {
-      loadScene(analysis);
-    } catch (err) {
-      console.error("viewer3d:", err);
-      clearGroup();
-      resize();
-      startLoop();
+  function fitCamera(box) {
+    if (box.isEmpty()) return;
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 1);
+    const dist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360)) * 1.35;
+    camera.position.set(center.x + dist * 0.75, center.y + dist * 0.55, center.z + dist * 0.85);
+    controls.target.copy(center);
+    controls.update();
+    controls.minDistance = maxDim * 0.15;
+    controls.maxDistance = maxDim * 12;
+  }
+
+  function addLights(t) {
+    const key = new THREE.DirectionalLight(toColor(t.threeKeyHex || "#f5f5f7"), 1.35);
+    key.position.set(40, 60, 30);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.bias = -0.0002;
+    const fill = new THREE.DirectionalLight(toColor(t.threePart), 0.35);
+    fill.position.set(-30, 20, -40);
+    const rim = new THREE.DirectionalLight(toColor(t.threeCut || "#4a9eff"), 0.25);
+    rim.position.set(0, -20, 50);
+    scene.add(key, fill, rim);
+    return [key, fill, rim];
+  }
+
+  let lights = addLights(canvasTheme());
+
+  function rebuildGrid(box) {
+    if (grid) {
+      scene.remove(grid);
+      grid.geometry.dispose();
+      grid.material.dispose();
+      grid = null;
     }
+    if (box.isEmpty()) return;
+    const t = canvasTheme();
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    const span = Math.max(size.x, size.z, 20) * 2.5;
+    grid = new THREE.GridHelper(span, 24, toColor(t.threeGrid), toColor(t.threeGrid));
+    grid.material.transparent = true;
+    grid.material.opacity = 0.35;
+    grid.position.set(center.x, box.min.y - 0.02, center.z);
+    scene.add(grid);
   }
 
   function loadScene(analysis) {
     lastAnalysis = analysis;
-    clearGroup();
+    clearGroup(group);
+    clearGroup(holeGroup);
+
     const t = canvasTheme();
     const partBox = new THREE.Box3();
     const preview = analysis.preview;
     const mesh = analysis.mesh ?? preview?.mesh;
 
-    if (preview?.stock) {
-      addStockBlock(preview.stock, t, partBox, analysis.stock_simulation);
-    } else if (preview?.bounds?.min?.[0] != null) {
-      expandBoxBounds(partBox, preview.bounds.min, preview.bounds.max);
+    if (preview?.bounds?.min?.[0] != null) {
+      partBox.expandByPoint(stepToThree(preview.bounds.min[0], preview.bounds.min[1], preview.bounds.min[2]));
+      partBox.expandByPoint(stepToThree(preview.bounds.max[0], preview.bounds.max[1], preview.bounds.max[2]));
     }
 
-    const hasSolidMesh = mesh?.vertices?.length >= 9;
-
-    if (!hasSolidMesh) {
-      for (const pl of (preview?.planes || []).slice(0, 8)) {
-        if (!isVec3(pl.normal) || !isVec3(pl.point) || !Number.isFinite(pl.half_extent)) continue;
-        const size = pl.half_extent * 2;
-        const geo = new THREE.PlaneGeometry(size, size);
-        const mat = new THREE.MeshPhysicalMaterial({
-          color: t.threePart,
-          metalness: 0.4,
-          roughness: 0.3,
-          transparent: true,
-          opacity: 0.75,
-          side: THREE.DoubleSide,
-        });
-        const m = new THREE.Mesh(geo, mat);
-        const n = stepToThree(pl.normal[0], pl.normal[1], pl.normal[2]).normalize();
-        const p = stepToThree(pl.point[0], pl.point[1], pl.point[2]);
-        m.position.copy(p);
-        m.lookAt(p.clone().add(n));
-        m.castShadow = true;
-        group.add(m);
-        partBox.expandByObject(m);
-        geo.dispose();
+    const flat = flattenVerts(mesh?.vertices);
+    if (flat && mesh?.indices?.length >= 3) {
+      const transformed = new Float32Array(flat.length);
+      for (let i = 0; i < flat.length; i += 3) {
+        const v = stepToThree(flat[i], flat[i + 1], flat[i + 2]);
+        transformed[i] = v.x;
+        transformed[i + 1] = v.y;
+        transformed[i + 2] = v.z;
       }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(transformed, 3));
+      geo.setIndex(mesh.indices);
+      geo.computeVertexNormals();
+      const solid = new THREE.Mesh(geo, partMaterial(t));
+      solid.castShadow = true;
+      solid.receiveShadow = true;
+      group.add(solid);
+      partBox.expandByObject(solid);
     }
 
-    const cylinders = preview?.cylinders || [];
-    for (const c of cylinders) {
-      if (!isVec3(c.axis) || !isVec3(c.origin) || !Number.isFinite(c.radius) || !Number.isFinite(c.height)) continue;
-      const axisLen = Math.hypot(c.axis[0], c.axis[1], c.axis[2]);
-      if (axisLen < 1e-9 || c.radius <= 0 || c.height <= 0) continue;
-      const geo = new THREE.CylinderGeometry(c.radius, c.radius, c.height, 40, 1, false);
-      const mat = partMaterial(t, { metalness: 0.48, roughness: 0.34 });
-      const m = new THREE.Mesh(geo, mat);
+    for (const c of preview?.cylinders || []) {
+      if (!isVec3(c.axis) || !isVec3(c.origin) || !Number.isFinite(c.radius) || c.radius <= 0) continue;
+      const h = Number(c.height);
+      if (!Number.isFinite(h) || h <= 0) continue;
+      const geo = new THREE.CylinderGeometry(c.radius, c.radius, h, 48, 1, false);
+      const m = new THREE.Mesh(geo, partMaterial(t, { metalness: 0.5, roughness: 0.32 }));
       m.castShadow = true;
       m.receiveShadow = true;
       const ax = stepToThree(c.axis[0], c.axis[1], c.axis[2]).normalize();
       const pos = stepToThree(c.origin[0], c.origin[1], c.origin[2]);
       m.position.copy(pos);
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax);
-      m.position.addScaledVector(ax, -c.height / 2);
+      m.position.addScaledVector(ax, -h / 2);
       group.add(m);
       partBox.expandByObject(m);
-      geo.dispose();
     }
 
-    const showTessMesh = hasSolidMesh && mesh?.indices?.length >= 3;
-
-    if (showTessMesh) {
-      const flat = flattenMeshVerts(mesh.vertices);
-      if (flat) {
-        const transformed = new Float32Array(flat.length);
-        for (let i = 0; i < flat.length; i += 3) {
-          const v = stepToThree(flat[i], flat[i + 1], flat[i + 2]);
-          transformed[i] = v.x;
-          transformed[i + 1] = v.y;
-          transformed[i + 2] = v.z;
-        }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute("position", new THREE.BufferAttribute(transformed, 3));
-        geo.setIndex(mesh.indices);
-        geo.computeVertexNormals();
-
-        const solid = new THREE.Mesh(geo, partMaterial(t));
-        solid.castShadow = true;
-        solid.receiveShadow = true;
-        group.add(solid);
-        partBox.expandByObject(solid);
-      }
+    for (const h of analysis.coaxial_holes || []) {
+      const r = h.radius;
+      const depth = h.depth;
+      const o = h.axis_origin;
+      const d = h.axis_direction;
+      if (r == null || depth == null || !o || !d) continue;
+      const ox = o.x ?? o[0];
+      const oy = o.y ?? o[1];
+      const oz = o.z ?? o[2];
+      const dx = d.x ?? d[0];
+      const dy = d.y ?? d[1];
+      const dz = d.z ?? d[2];
+      const geo = new THREE.CylinderGeometry(r, r, depth, 40, 1, true);
+      const m = new THREE.Mesh(geo, holeMaterial(t));
+      const ax = stepToThree(dx, dy, dz).normalize();
+      const pos = stepToThree(ox, oy, oz);
+      m.position.copy(pos);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax);
+      m.position.addScaledVector(ax, depth / 2);
+      holeGroup.add(m);
     }
 
-    const tp = analysis.toolpath;
-    if (tp?.segments?.length) {
-      const cutPts = [];
-      const rapidPts = [];
-      let prevStep = null;
-      let prevThree = null;
+    rebuildGrid(partBox);
+    fitCamera(partBox.isEmpty() ? new THREE.Box3().setFromObject(group) : partBox);
+  }
 
-      for (const seg of tp.segments) {
-        const samples = sampleSegmentStep(seg, prevStep);
-        for (const p of samples) {
-          if (!isVec3(p.v)) continue;
-          const v = stepToThree(p.v[0], p.v[1], p.v[2]);
-          if (prevThree && Number.isFinite(v.x)) {
-            if (p.rapid) rapidPts.push(prevThree.clone(), v);
-            else cutPts.push(prevThree.clone(), v);
-          }
-          prevStep = p.v;
-          prevThree = v;
-        }
-      }
-
-      if (cutPts.length > 1) {
-        const g = new THREE.BufferGeometry().setFromPoints(cutPts);
-        group.add(
-          new THREE.Line(
-            g,
-            new THREE.LineBasicMaterial({
-              color: t.threeCut,
-              transparent: true,
-              opacity: 0.75,
-            })
-          )
-        );
-      }
-
-      if (rapidPts.length > 1) {
-        const g = new THREE.BufferGeometry().setFromPoints(rapidPts);
-        const rapidLine = new THREE.Line(
-          g,
-          new THREE.LineDashedMaterial({
-            color: t.threeRapid,
-            transparent: true,
-            opacity: 0.4,
-            dashSize: 1.5,
-            gapSize: 1,
-          })
-        );
-        rapidLine.computeLineDistances();
-        group.add(rapidLine);
-      }
-    }
-
-    fitCamera(partBox, true);
-    requestAnimationFrame(() => {
-      resize();
+  function load(analysis) {
+    try {
+      loadScene(analysis);
       startLoop();
-    });
-  }
-
-  function bindPointer() {
-    canvas.style.touchAction = "none";
-    canvas.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      lastPointerX = e.clientX;
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - lastPointerX;
-      lastPointerX = e.clientX;
-      thetaVel += dx * 0.004;
-    });
-    const end = () => {
-      dragging = false;
-    };
-    canvas.addEventListener("pointerup", end);
-    canvas.addEventListener("pointercancel", end);
-  }
-
-  bindPointer();
-
-  function renderFrame() {
-    if (introT < 1) {
-      introT = Math.min(1, introT + 0.024);
-      const eased = 1 - (1 - introT) ** 3;
-      orbitRadius = orbitTarget * (1.35 - 0.35 * eased);
-    } else {
-      orbitRadius += (orbitTarget - orbitRadius) * 0.06;
+    } catch (e) {
+      console.error("viewer3d:", e);
     }
+  }
 
-    if (!dragging) thetaVel *= 0.92;
-    theta += 0.0004 + thetaVel;
-    thetaVel *= 0.94;
-
-    camera.position.set(
-      target.x + orbitRadius * Math.cos(theta),
-      target.y + orbitRadius * 0.38,
-      target.z + orbitRadius * Math.sin(theta)
-    );
-    camera.lookAt(target);
+  function frame() {
+    raf = requestAnimationFrame(frame);
+    controls.update();
     renderer.render(scene, camera);
   }
 
   function startLoop() {
-    stopLoop();
-    if (!visible) return;
-    const loop = () => {
-      renderFrame();
-      animId = requestAnimationFrame(loop);
-    };
-    loop();
+    if (running) return;
+    running = true;
+    frame();
   }
 
   function stopLoop() {
-    if (animId) {
-      cancelAnimationFrame(animId);
-      animId = null;
-    }
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
   }
 
-  resize();
+  function resize() {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w < 2 || h < 2) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  function refresh() {
+    lights.forEach((l) => scene.remove(l));
+    lights = addLights(canvasTheme());
+    applyTheme();
+    if (lastAnalysis) loadScene(lastAnalysis);
+    resize();
+  }
+
+  applyTheme();
+  onThemeChange(refresh);
+
+  const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
+  ro?.observe(canvas);
 
   return {
     load,
     resize,
-    refresh: () => lastAnalysis && load(lastAnalysis),
-    stop: stopLoop,
+    refresh,
+    dispose() {
+      stopLoop();
+      ro?.disconnect();
+      controls.dispose();
+      renderer.dispose();
+    },
   };
 }

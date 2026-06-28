@@ -1,7 +1,7 @@
 use js_sys::{Array, Function};
 use steprs::{
     analyze_web_json, analyze_web_json_with_progress, core::ParsePhase, core::ParseProgress,
-    parse_only, PipelineOptions,
+    parse_only, regression_specs_json, run_cylinder_block_regression, verify_sample,
 };
 use wasm_bindgen::prelude::*;
 
@@ -38,11 +38,6 @@ impl ParseProgress for JsProgress<'_> {
     }
 }
 
-fn parse_options(options_json: &str) -> Result<PipelineOptions, JsValue> {
-    serde_json::from_str(options_json)
-        .map_err(|e| JsValue::from_str(&format!("invalid options: {e}")))
-}
-
 #[wasm_bindgen(js_name = parseStep)]
 pub fn parse_step(content: &str) -> Result<String, JsValue> {
     let stats = parse_only(content).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -50,34 +45,44 @@ pub fn parse_step(content: &str) -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen(js_name = analyzeStep)]
-pub fn analyze_step(content: &str, include_gcode: bool) -> Result<String, JsValue> {
-    let options = PipelineOptions {
-        emit_gcode: include_gcode,
-        validate_gcode: include_gcode,
-        simulate_stock: true,
-        ..Default::default()
-    };
-    analyze_web_json(content, &options).map_err(|e| JsValue::from_str(&e.to_string()))
+pub fn analyze_step(content: &str) -> Result<String, JsValue> {
+    analyze_web_json(content).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Full options JSON: `{ "emit_gcode": true, "tool": { "diameter_mm": 6 }, "post": { "processor": "fanuc" } }`
+/// Legacy alias — options JSON is ignored.
 #[wasm_bindgen(js_name = analyzeStepOptions)]
-pub fn analyze_step_options(content: &str, options_json: &str) -> Result<String, JsValue> {
-    let options = parse_options(options_json)?;
-    analyze_web_json(content, &options).map_err(|e| JsValue::from_str(&e.to_string()))
+pub fn analyze_step_options(content: &str, _options_json: &str) -> Result<String, JsValue> {
+    analyze_web_json(content).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Same as analyzeStepOptions but invokes onProgress(phase, done, total) during parse/post.
 #[wasm_bindgen(js_name = analyzeStepOptionsWithProgress)]
 pub fn analyze_step_options_with_progress(
     content: &str,
-    options_json: &str,
+    _options_json: &str,
     on_progress: &Function,
 ) -> Result<String, JsValue> {
-    let options = parse_options(options_json)?;
     let progress = JsProgress {
         callback: on_progress,
     };
-    analyze_web_json_with_progress(content, &options, Some(&progress))
+    analyze_web_json_with_progress(content, Some(&progress))
         .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen(js_name = verifyCylinderBlockRegression)]
+pub fn verify_cylinder_block_regression() -> Result<String, JsValue> {
+    let result = run_cylinder_block_regression();
+    serde_json::to_string(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen(js_name = verifyRegressionSample)]
+pub fn verify_regression_sample(content: &str, spec_json: &str) -> Result<String, JsValue> {
+    let spec = serde_json::from_str(spec_json)
+        .map_err(|e| JsValue::from_str(&format!("invalid spec: {e}")))?;
+    let result = verify_sample(content, &spec);
+    serde_json::to_string(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen(js_name = regressionSpecs)]
+pub fn regression_specs() -> Result<String, JsValue> {
+    regression_specs_json().map_err(|e| JsValue::from_str(&e.to_string()))
 }

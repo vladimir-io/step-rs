@@ -5,7 +5,6 @@ members = [
     "crates/steprs-schema",
     "crates/steprs-topology",
     "crates/steprs-features",
-    "crates/steprs-path",
     "crates/steprs",
     "crates/steprs-wasm",
     "crates/steprs-cli",
@@ -30,7 +29,6 @@ steprs-core = { path = "crates/steprs-core" }
 steprs-schema = { path = "crates/steprs-schema" }
 steprs-topology = { path = "crates/steprs-topology" }
 steprs-features = { path = "crates/steprs-features" }
-steprs-path = { path = "crates/steprs-path" }
 
 [profile.release]
 lto = true

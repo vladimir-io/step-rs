@@ -12,7 +12,7 @@ async function ensureWasm() {
 }
 
 self.onmessage = async (event) => {
-  const { id, type, text, optionsJson } = event.data;
+  const { id, type, text } = event.data;
   try {
     if (type === "init") {
       await ensureWasm();
@@ -24,11 +24,7 @@ self.onmessage = async (event) => {
       const onProgress = (phase, done, total) => {
         self.postMessage({ id, ok: true, type: "progress", phase, done, total });
       };
-      const json = mod.analyzeStepOptionsWithProgress(
-        text,
-        optionsJson || "{}",
-        onProgress
-      );
+      const json = mod.analyzeStepOptionsWithProgress(text, "{}", onProgress);
       self.postMessage({ id, ok: true, type: "result", json });
       return;
     }
