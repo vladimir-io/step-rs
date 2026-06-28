@@ -26,10 +26,7 @@ impl PlaneFrame {
     }
 
     pub fn to_world(&self, u: f64, v: f64) -> [f64; 3] {
-        let p = self
-            .origin
-            .add(self.u.scale(u))
-            .add(self.v.scale(v));
+        let p = self.origin.add(self.u.scale(u)).add(self.v.scale(v));
         [p.x, p.y, p.z]
     }
 
@@ -57,10 +54,7 @@ pub fn loop_area_uv(points: &[[f64; 3]], frame: &PlaneFrame) -> f64 {
         return 0.0;
     }
     let mut area = 0.0;
-    let uv: Vec<_> = points
-        .iter()
-        .map(|p| frame.project_array(*p))
-        .collect();
+    let uv: Vec<_> = points.iter().map(|p| frame.project_array(*p)).collect();
     for i in 0..uv.len() {
         let j = (i + 1) % uv.len();
         area += uv[i].0 * uv[j].1 - uv[j].0 * uv[i].1;

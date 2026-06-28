@@ -79,7 +79,12 @@ fn customer_samples_parse_and_analyze() {
             result.features.features.len()
         );
         assert!(
-            result.toolpath.as_ref().map(|t| t.segments.len()).unwrap_or(0) > 0,
+            result
+                .toolpath
+                .as_ref()
+                .map(|t| t.segments.len())
+                .unwrap_or(0)
+                > 0,
             "{}: expected toolpath",
             expect.name
         );

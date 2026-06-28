@@ -1,5 +1,5 @@
-use steprs_path::{emit_gcode, validate_job, ToolConfig};
 use steprs_features::{FeatureModel, FeatureSummary};
+use steprs_path::{emit_gcode, validate_job, ToolConfig};
 
 #[test]
 fn validates_emitted_job() {

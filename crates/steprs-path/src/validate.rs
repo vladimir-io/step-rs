@@ -26,7 +26,12 @@ pub fn validate_job(job: &MachiningJob) -> GCodeValidation {
     for block in &job.blocks {
         for line in &block.lines {
             let upper = line.to_ascii_uppercase();
-            if upper.starts_with('G') && (upper.contains("G0") || upper.contains("G1") || upper.contains("G2") || upper.contains("G3")) {
+            if upper.starts_with('G')
+                && (upper.contains("G0")
+                    || upper.contains("G1")
+                    || upper.contains("G2")
+                    || upper.contains("G3"))
+            {
                 motion_lines += 1;
             }
             if upper.contains("M03") || upper.contains("M3") {
@@ -37,7 +42,8 @@ pub fn validate_job(job: &MachiningJob) -> GCodeValidation {
             }
             if let Some(z) = extract_z(&upper) {
                 if z < -500.0 {
-                    v.warnings.push(format!("deep Z move ({z:.3}) — verify units"));
+                    v.warnings
+                        .push(format!("deep Z move ({z:.3}) — verify units"));
                 }
             }
             if let Some(f) = extract_f(&upper) {

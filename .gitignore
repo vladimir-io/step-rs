@@ -1,10 +1,13 @@
 /target
 /pkg
+/web/pkg/
+/crates/steprs-wasm/pkg/
 /web/node_modules
 /web/.test-server.pid
 /web/e2e-screenshot.png
 /web/e2e-debug.png
 /web/samples
+samples/samples
 *.wasm
 .DS_Store
 .test-server.pid

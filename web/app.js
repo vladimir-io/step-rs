@@ -128,14 +128,10 @@ function analyzeInWorker(text, onProgress) {
 async function analyze(content, onProgress) {
   const opts = buildOptions();
   if (workerReady) return analyzeInWorker(content, onProgress);
-  if (wasm.analyzeStepOptionsWithProgress) {
-    return wasm.analyzeStepOptionsWithProgress(content, opts, (phase, done, total) => {
-      const pct = mapProgress(phase, done, total ?? 0);
-      if (pct != null) onProgress?.(pct);
-    });
-  }
-  if (wasm.analyzeStepOptions) return wasm.analyzeStepOptions(content, opts);
-  return wasm.analyzeStep(content, $("gcode-toggle").checked);
+  return wasm.analyzeStepOptionsWithProgress(content, opts, (phase, done, total) => {
+    const pct = mapProgress(phase, done, total ?? 0);
+    if (pct != null) onProgress?.(pct);
+  });
 }
 
 function setMessage(text, isError = false) {

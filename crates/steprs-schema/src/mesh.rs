@@ -86,7 +86,9 @@ fn ingest_tessellated_solid(
     store: &RecordStore,
     points: &std::collections::HashMap<u32, [f32; 3]>,
 ) {
-    let Some(outer) = store.get(outer_id) else { return };
+    let Some(outer) = store.get(outer_id) else {
+        return;
+    };
     for i in 0..outer.parameters.len() {
         if let Some(shell_id) = outer.parameters[i].as_ref_id() {
             if let Some(shell) = store.get(shell_id) {
@@ -173,7 +175,8 @@ fn push_triangle_fan(mesh: &mut TessellationMesh, coords: &[[f32; 3]]) {
         mesh.vertices.push(*c);
     }
     for i in 1..(coords.len() as u32 - 1) {
-        mesh.indices.extend_from_slice(&[base, base + i, base + i + 1]);
+        mesh.indices
+            .extend_from_slice(&[base, base + i, base + i + 1]);
     }
 }
 
@@ -183,7 +186,9 @@ fn triangulate_shell(
     mesh: &mut TessellationMesh,
     points: &std::collections::HashMap<u32, [f32; 3]>,
 ) {
-    let Some(shell) = store.get(shell_id) else { return };
+    let Some(shell) = store.get(shell_id) else {
+        return;
+    };
     if let Some(faces) = shell.param(1).and_then(|p| p.as_list()) {
         for face_ref in faces {
             if let Some(fid) = face_ref.as_ref_id() {
@@ -209,9 +214,15 @@ fn extract_poly_loop(
     mesh: &mut TessellationMesh,
     points: &std::collections::HashMap<u32, [f32; 3]>,
 ) {
-    let Some(bound) = store.get(bound_id) else { return };
-    let Some(loop_id) = bound.ref_at(1) else { return };
-    let Some(loop_rec) = store.get(loop_id) else { return };
+    let Some(bound) = store.get(bound_id) else {
+        return;
+    };
+    let Some(loop_id) = bound.ref_at(1) else {
+        return;
+    };
+    let Some(loop_rec) = store.get(loop_id) else {
+        return;
+    };
     if loop_rec.name != "EDGE_LOOP" && loop_rec.name != "POLY_LOOP" {
         return;
     }
@@ -237,11 +248,13 @@ fn mesh_from_point_lists(store: &RecordStore, mesh: &mut TessellationMesh, scale
             if let Some(coords) = coords_from_list(record) {
                 let scaled: Vec<[f32; 3]> = coords
                     .iter()
-                    .map(|c| [
-                        (c[0] as f64 * scale) as f32,
-                        (c[1] as f64 * scale) as f32,
-                        (c[2] as f64 * scale) as f32,
-                    ])
+                    .map(|c| {
+                        [
+                            (c[0] as f64 * scale) as f32,
+                            (c[1] as f64 * scale) as f32,
+                            (c[2] as f64 * scale) as f32,
+                        ]
+                    })
                     .collect();
                 push_triangle_fan(mesh, &scaled);
             }

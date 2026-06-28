@@ -1,9 +1,9 @@
+use steprs_core::parse_step_file;
+use steprs_features::recognize_features;
 use steprs_path::{
     emit_gcode_from_toolpath, job_to_string, plan_toolpath_brep, toolpath_from_gcode, PostOptions,
     ToolConfig,
 };
-use steprs_features::recognize_features;
-use steprs_core::parse_step_file;
 use steprs_schema::SchemaCache;
 use steprs_topology::build_brep;
 

@@ -128,7 +128,7 @@ async function main() {
     );
     assert(blocking.length === 0, `Browser errors:\n${blocking.join("\n")}`);
 
-    await page.screenshot({ path: "/Users/vladimirgutierrez/Documents/projects/step-rs/web/e2e-screenshot.png", fullPage: false });
+    await page.screenshot({ path: "e2e-screenshot.png", fullPage: false });
     console.log("PASS — layout, WASM analysis, metrics, features, G-code, tabs");
     console.log(JSON.stringify({ layout, metrics: { ...metrics, gcodeLen: metrics.gcodeLen } }, null, 2));
   } finally {

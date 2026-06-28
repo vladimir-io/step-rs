@@ -1,6 +1,6 @@
+use steprs_core::parse_step_file;
 use steprs_core::parser::entity::entity_instance;
 use steprs_core::parser::parameter::{parameter, parse_parameter_list};
-use steprs_core::parse_step_file;
 
 #[test]
 fn parses_ref_list_param() {

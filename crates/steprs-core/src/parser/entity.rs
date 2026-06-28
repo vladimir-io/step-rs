@@ -35,13 +35,7 @@ fn complex_entity_instance(input: &str) -> ParseResult<'_, EntityInstance> {
         first.id = id;
     }
 
-    Ok((
-        input,
-        EntityInstance::Complex {
-            id,
-            records,
-        },
-    ))
+    Ok((input, EntityInstance::Complex { id, records }))
 }
 
 fn simple_record(input: &str) -> ParseResult<'_, Record> {

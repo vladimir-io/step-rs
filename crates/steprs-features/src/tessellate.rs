@@ -40,20 +40,16 @@ pub fn tessellate_brep_faces(brep: &BRepModel, features: &FeatureModel) -> Tesse
             }
             SurfaceKind::Plane => {
                 if let (Some(p), Some(n)) = (face.plane_point, face.plane_normal) {
-                    push_plane_patch(
-                        &mut mesh,
-                        p,
-                        n,
-                        bounds_min,
-                        bounds_max,
-                        PLANE_SUBDIV,
-                    );
+                    push_plane_patch(&mut mesh, p, n, bounds_min, bounds_max, PLANE_SUBDIV);
                 }
             }
             SurfaceKind::Cone => {
-                if let (Some(o), Some(a), Some(r), Some(angle)) =
-                    (face.axis_origin, face.axis_direction, face.radius, face.semi_angle)
-                {
+                if let (Some(o), Some(a), Some(r), Some(angle)) = (
+                    face.axis_origin,
+                    face.axis_direction,
+                    face.radius,
+                    face.semi_angle,
+                ) {
                     let height = cylinder_height_for_face(face.id, features, r);
                     push_cone_mesh(
                         &mut mesh,
@@ -283,7 +279,8 @@ fn push_torus_mesh(
             let px = u[0] * ring_r * ct + v[0] * ring_r * st + az[0] * ring_offset;
             let py = u[1] * ring_r * ct + v[1] * ring_r * st + az[1] * ring_offset;
             let pz = u[2] * ring_r * ct + v[2] * ring_r * st + az[2] * ring_offset;
-            mesh.vertices.push([origin[0] + px, origin[1] + py, origin[2] + pz]);
+            mesh.vertices
+                .push([origin[0] + px, origin[1] + py, origin[2] + pz]);
         }
     }
     let stride = segments_u + 1;
@@ -299,7 +296,9 @@ fn push_torus_mesh(
 }
 
 fn orthonormal_basis(axis: [f32; 3]) -> ([f32; 3], [f32; 3], [f32; 3]) {
-    let len = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt().max(1e-6);
+    let len = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2])
+        .sqrt()
+        .max(1e-6);
     let az = [axis[0] / len, axis[1] / len, axis[2] / len];
     let up = if az[2].abs() < 0.9 {
         [0.0f32, 0.0, 1.0]

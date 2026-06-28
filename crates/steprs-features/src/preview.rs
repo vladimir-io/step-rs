@@ -148,11 +148,7 @@ fn extend_bounds(min: &mut [f64; 3], max: &mut [f64; 3], c: &PreviewCylinder) {
     let r = c.radius;
     for dx in [-r, r] {
         for dy in [-r, r] {
-            extend_bounds_point(
-                min,
-                max,
-                [c.origin[0] + dx, c.origin[1] + dy, c.origin[2]],
-            );
+            extend_bounds_point(min, max, [c.origin[0] + dx, c.origin[1] + dy, c.origin[2]]);
             extend_bounds_point(
                 min,
                 max,

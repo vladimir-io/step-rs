@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
-use steprs::{analyze_step, parse_only, PipelineOptions};
 use steprs::path::{PostOptions, PostProcessor};
+use steprs::{analyze_step, parse_only, PipelineOptions};
 
 #[derive(Parser)]
 #[command(name = "steprs", version, about = "STEP file analyzer — steprs.dev")]
@@ -13,25 +13,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Phase 0/1: header + record statistics
+    /// Header and record statistics
     Inspect {
         path: PathBuf,
         #[arg(long)]
         json: bool,
     },
-    /// Phases 0–4: full pipeline
-        Analyze {
-            path: PathBuf,
-            #[arg(long)]
-            json: bool,
-            #[arg(long)]
-            gcode: Option<PathBuf>,
-            #[arg(long)]
-            no_gcode: bool,
-            #[arg(long, default_value = "fanuc")]
-            post: String,
-        },
-    /// List MVP feature catalog
+    /// Full STEP → features → toolpath → G-code pipeline
+    Analyze {
+        path: PathBuf,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        gcode: Option<PathBuf>,
+        #[arg(long)]
+        no_gcode: bool,
+        #[arg(long, default_value = "fanuc")]
+        post: String,
+    },
+    /// List supported manufacturing feature kinds
     Catalog,
 }
 
@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Catalog => {
-            println!("Manufacturing feature MVP catalog:\n");
+            println!("Manufacturing feature catalog:\n");
             for kind in steprs_core::ManufacturingFeatureKind::MVP {
                 println!("  • {} ({:?})", kind.label(), kind);
             }

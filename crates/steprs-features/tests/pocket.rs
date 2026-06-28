@@ -2,9 +2,9 @@ use std::fs;
 
 use steprs_core::ManufacturingFeatureKind;
 use steprs_core::RecordStore;
+use steprs_features::{detect_planar_pockets, recognize_features};
 use steprs_schema::SchemaCache;
 use steprs_topology::build_brep;
-use steprs_features::{detect_planar_pockets, recognize_features};
 
 fn load_sample(name: &str) -> RecordStore {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -39,7 +39,7 @@ fn pocket_profile_has_uv_axes() {
         .find(|f| f.kind == ManufacturingFeatureKind::RectangularPocket)
         .expect("pocket feature");
     let profile = pocket.pocket.as_ref().unwrap();
-    let u_len = (profile.u_axis[0].powi(2) + profile.u_axis[1].powi(2) + profile.u_axis[2].powi(2))
-        .sqrt();
+    let u_len =
+        (profile.u_axis[0].powi(2) + profile.u_axis[1].powi(2) + profile.u_axis[2].powi(2)).sqrt();
     assert!((u_len - 1.0).abs() < 0.01);
 }

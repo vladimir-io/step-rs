@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Phase 0 — manufacturing feature MVP catalog (product contract).
+/// Manufacturing feature taxonomy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ManufacturingFeatureKind {

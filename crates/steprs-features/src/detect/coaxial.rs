@@ -93,12 +93,17 @@ fn coaxial_cluster_feature(cylindrical: &[CylFace], cluster: &[usize]) -> Manufa
     } else {
         (
             ManufacturingFeatureKind::ThroughHole,
-            format!("Through coaxial bore — {} faces, Ø{:.2}", cluster.len(), max_r * 2.0),
+            format!(
+                "Through coaxial bore — {} faces, Ø{:.2}",
+                cluster.len(),
+                max_r * 2.0
+            ),
             0.88,
         )
     };
 
-    let face_ids: smallvec::SmallVec<[u32; 8]> = cluster.iter().map(|&i| cylindrical[i].id).collect();
+    let face_ids: smallvec::SmallVec<[u32; 8]> =
+        cluster.iter().map(|&i| cylindrical[i].id).collect();
     let ref_face = cylindrical[cluster[0]];
 
     ManufacturingFeature {

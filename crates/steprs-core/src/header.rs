@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Parsed HEADER section metadata (Phase 0 introspection).
+/// Parsed HEADER section metadata.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StepHeader {
     pub description: Vec<String>,

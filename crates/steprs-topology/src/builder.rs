@@ -37,16 +37,17 @@ fn build_face(store: &RecordStore, cache: &SchemaCache, advanced: &AdvancedFace)
         .bound_ids
         .iter()
         .filter_map(|bid| {
-            cache.face_bounds.iter().find(|fb| fb.id == *bid).map(|fb| {
-                FaceLoop {
+            cache
+                .face_bounds
+                .iter()
+                .find(|fb| fb.id == *bid)
+                .map(|fb| FaceLoop {
                     loop_id: fb.loop_id,
                     is_outer: fb.is_outer,
-                }
-            })
+                })
         })
         .collect();
-    let bound_loop_ids: SmallVec<[u32; 4]> =
-        bound_loops.iter().map(|l| l.loop_id).collect();
+    let bound_loop_ids: SmallVec<[u32; 4]> = bound_loops.iter().map(|l| l.loop_id).collect();
 
     Face {
         id: advanced.id,
@@ -270,11 +271,7 @@ fn compute_adjacency(
     adjacency
 }
 
-fn edge_ids_for_loop(
-    loop_id: u32,
-    store: &RecordStore,
-    _cache: &SchemaCache,
-) -> Option<Vec<u32>> {
+fn edge_ids_for_loop(loop_id: u32, store: &RecordStore, _cache: &SchemaCache) -> Option<Vec<u32>> {
     let record = store.get(loop_id)?;
     match record.name.as_str() {
         "EDGE_LOOP" => {

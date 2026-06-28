@@ -1,5 +1,4 @@
-//! Curated EXPRESS entity registry (AP203/AP214/AP242 common entities).
-//! Provides forward-compatible parsing hints without a full EXPRESS compiler.
+//! Known EXPRESS entities for typed schema extraction.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -57,9 +56,7 @@ pub struct EntityRegistry {
     pub unknown_top: Vec<(String, usize)>,
 }
 
-pub fn build_registry(
-    by_type: &std::collections::HashMap<String, Vec<u32>>,
-) -> EntityRegistry {
+pub fn build_registry(by_type: &std::collections::HashMap<String, Vec<u32>>) -> EntityRegistry {
     let typed: HashSet<&str> = TYPED_ENTITIES.iter().copied().collect();
     let ap242: HashSet<&str> = AP242_ENTITIES.iter().copied().collect();
 

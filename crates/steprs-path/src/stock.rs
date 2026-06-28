@@ -109,9 +109,7 @@ fn sample_segment(from: [f64; 3], seg: &ToolpathSegment) -> Vec<[f64; 3]> {
             center_offset,
             clockwise,
             ..
-        } => {
-            arc_samples(from, *to, *center_offset, *clockwise, 32)
-        }
+        } => arc_samples(from, *to, *center_offset, *clockwise, 32),
         ToolpathSegment::Drill {
             xy,
             z_safe,
@@ -156,7 +154,9 @@ fn arc_samples(
 ) -> Vec<[f64; 3]> {
     let cx = from[0] + center_offset[0];
     let cy = from[1] + center_offset[1];
-    let r = (center_offset[0].powi(2) + center_offset[1].powi(2)).sqrt().max(1e-6);
+    let r = (center_offset[0].powi(2) + center_offset[1].powi(2))
+        .sqrt()
+        .max(1e-6);
     let a0 = (from[1] - cy).atan2(from[0] - cx);
     let a1 = (to[1] - cy).atan2(to[0] - cx);
     let mut delta = a1 - a0;
@@ -200,9 +200,13 @@ fn carve_local(
     let mut over = 0u32;
 
     let ix0 = ((x - origin[0] - r as f64) / dx).floor().max(0.0) as u32;
-    let ix1 = ((x - origin[0] + r as f64) / dx).ceil().min(nx as f64 - 1.0) as u32;
+    let ix1 = ((x - origin[0] + r as f64) / dx)
+        .ceil()
+        .min(nx as f64 - 1.0) as u32;
     let iy0 = ((y - origin[1] - r as f64) / dy).floor().max(0.0) as u32;
-    let iy1 = ((y - origin[1] + r as f64) / dy).ceil().min(ny as f64 - 1.0) as u32;
+    let iy1 = ((y - origin[1] + r as f64) / dy)
+        .ceil()
+        .min(ny as f64 - 1.0) as u32;
 
     let target = (z - origin[2]) as f32;
 

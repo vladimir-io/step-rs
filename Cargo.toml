@@ -17,7 +17,7 @@ version = "1.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vladimir-io/step-rs"
-authors = ["Vladimir Gutierrez"]
+authors = ["steprs contributors"]
 
 [workspace.dependencies]
 nom = "7.1"

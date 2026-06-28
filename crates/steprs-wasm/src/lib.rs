@@ -39,15 +39,8 @@ impl ParseProgress for JsProgress<'_> {
 }
 
 fn parse_options(options_json: &str) -> Result<PipelineOptions, JsValue> {
-    match serde_json::from_str::<PipelineOptions>(options_json) {
-        Ok(mut o) => {
-            if !options_json.contains("emit_gcode") {
-                o.emit_gcode = true;
-            }
-            Ok(o)
-        }
-        Err(e) => Err(JsValue::from_str(&format!("invalid options: {e}"))),
-    }
+    serde_json::from_str(options_json)
+        .map_err(|e| JsValue::from_str(&format!("invalid options: {e}")))
 }
 
 #[wasm_bindgen(js_name = parseStep)]

@@ -81,7 +81,11 @@ pub fn plan_pocket_or_slot(
                 break;
             }
             if let Some((ulo, uhi)) = horizontal_slice(&poly, next_v, u_start, u_end) {
-                let stay = if forward { uhi.min(u_end) } else { ulo.max(u_start) };
+                let stay = if forward {
+                    uhi.min(u_end)
+                } else {
+                    ulo.max(u_start)
+                };
                 program.push_linear(profile.to_world(stay, next_v, z), feed_cut, true);
             }
             v = next_v;

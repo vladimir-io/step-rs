@@ -258,17 +258,15 @@ fn parse_cartesian_point(id: u32, record: &Record) -> Option<CartesianPoint> {
 
 fn parse_direction(id: u32, record: &Record) -> Option<Direction> {
     let ratios = record.param(1).or_else(|| record.param(0))?;
-    let coords = ratios
-        .as_vec3()
-        .or_else(|| {
-            ratios.as_list().and_then(|l| {
-                if l.len() >= 3 {
-                    Some([l[0].as_real()?, l[1].as_real()?, l[2].as_real()?])
-                } else {
-                    None
-                }
-            })
-        })?;
+    let coords = ratios.as_vec3().or_else(|| {
+        ratios.as_list().and_then(|l| {
+            if l.len() >= 3 {
+                Some([l[0].as_real()?, l[1].as_real()?, l[2].as_real()?])
+            } else {
+                None
+            }
+        })
+    })?;
     let direction = Vec3::from_array(coords);
     Some(Direction { id, direction })
 }

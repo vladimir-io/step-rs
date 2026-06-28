@@ -15,11 +15,11 @@ use steprs_core::{
     parse_stats, parse_step_file, parse_step_streaming, ParseProgress, ParseStats, RecordStore,
 };
 use steprs_features::{build_scene_preview, recognize_features, FeatureModel, ScenePreview};
-use steprs_schema::{build_registry, EntityRegistry, TessellationMesh};
 use steprs_path::{
     emit_gcode_from_toolpath, job_to_string, plan_toolpath_brep, simulate_stock, validate_job,
     GCodeValidation, PostOptions, StockSimulation, ToolConfig, ToolpathProgram,
 };
+use steprs_schema::{build_registry, EntityRegistry, TessellationMesh};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisResult {
@@ -45,6 +45,7 @@ pub struct BRepSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PipelineOptions {
     pub emit_toolpath: bool,
     pub emit_gcode: bool,

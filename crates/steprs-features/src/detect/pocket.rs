@@ -80,12 +80,7 @@ pub fn detect_planar_pockets(
             } else {
                 (
                     ManufacturingFeatureKind::RectangularPocket,
-                    format!(
-                        "Pocket {:.1}×{:.1}×{:.1} mm",
-                        l,
-                        w,
-                        depth.unwrap_or(5.0)
-                    ),
+                    format!("Pocket {:.1}×{:.1}×{:.1} mm", l, w, depth.unwrap_or(5.0)),
                     0.9,
                 )
             };
@@ -204,11 +199,7 @@ fn orient_corners(points: &[[f64; 3]], frame: &PlaneFrame) -> Vec<[f64; 3]> {
     rect_corners_uv(frame, min_u, max_u, min_v, max_v)
 }
 
-fn walk_loop(
-    loop_id: u32,
-    store: &RecordStore,
-    cache: &SchemaCache,
-) -> Option<Vec<[f64; 3]>> {
+fn walk_loop(loop_id: u32, store: &RecordStore, cache: &SchemaCache) -> Option<Vec<[f64; 3]>> {
     let record = store.get(loop_id)?;
     let list = record.param(1)?.as_list()?;
     let mut out = Vec::new();
@@ -238,9 +229,7 @@ fn walk_loop(
 fn append_dedupe(out: &mut Vec<[f64; 3]>, pts: Vec<[f64; 3]>) {
     for p in pts {
         if let Some(last) = out.last() {
-            if (last[0] - p[0]).hypot(last[1] - p[1]) < 0.01
-                && (last[2] - p[2]).abs() < 0.01
-            {
+            if (last[0] - p[0]).hypot(last[1] - p[1]) < 0.01 && (last[2] - p[2]).abs() < 0.01 {
                 continue;
             }
         }
@@ -273,11 +262,7 @@ fn edge_polyline(
     Some((pts, true))
 }
 
-fn vertex_coords(
-    vertex_id: u32,
-    store: &RecordStore,
-    cache: &SchemaCache,
-) -> Option<[f64; 3]> {
+fn vertex_coords(vertex_id: u32, store: &RecordStore, cache: &SchemaCache) -> Option<[f64; 3]> {
     let v = store.get(vertex_id)?;
     let pid = v.ref_at(1)?;
     let p = cache.resolve_point(store, pid)?;
@@ -306,12 +291,7 @@ fn line_curve_endpoint(
     ])
 }
 
-fn depth_from_adjacency(
-    brep: &BRepModel,
-    face: &Face,
-    origin: Vec3,
-    normal: Vec3,
-) -> Option<f64> {
+fn depth_from_adjacency(brep: &BRepModel, face: &Face, origin: Vec3, normal: Vec3) -> Option<f64> {
     let mut best = 0.0f64;
     for adj in &brep.adjacency {
         let other_id = if adj.face_a == face.id {
@@ -323,9 +303,8 @@ fn depth_from_adjacency(
         };
         let other = brep.faces.iter().find(|f| f.id == other_id)?;
         let p = other.plane_point?;
-        let d = (p.x - origin.x) * normal.x
-            + (p.y - origin.y) * normal.y
-            + (p.z - origin.z) * normal.z;
+        let d =
+            (p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y + (p.z - origin.z) * normal.z;
         if d > 0.05 {
             best = best.max(d);
         }
@@ -349,9 +328,8 @@ fn estimate_depth(brep: &BRepModel, face: &Face) -> Option<f64> {
             continue;
         }
         let p = other.plane_point?;
-        let d = (p.x - origin.x) * normal.x
-            + (p.y - origin.y) * normal.y
-            + (p.z - origin.z) * normal.z;
+        let d =
+            (p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y + (p.z - origin.z) * normal.z;
         if d.abs() > 1e-6 && d.abs() < min_dist {
             min_dist = d.abs();
         }

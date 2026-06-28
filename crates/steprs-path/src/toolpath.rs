@@ -35,8 +35,13 @@ pub struct ToolpathStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolpathSegment {
-    Rapid { to: [f64; 3] },
-    Linear { to: [f64; 3], feed_mm_min: f64 },
+    Rapid {
+        to: [f64; 3],
+    },
+    Linear {
+        to: [f64; 3],
+        feed_mm_min: f64,
+    },
     Arc {
         to: [f64; 3],
         center_offset: [f64; 2],
@@ -98,13 +103,7 @@ impl ToolpathProgram {
         self.extend_bounds([xy[0], xy[1], z_safe]);
     }
 
-    pub fn push_arc(
-        &mut self,
-        to: [f64; 3],
-        center_offset: [f64; 2],
-        clockwise: bool,
-        feed: f64,
-    ) {
+    pub fn push_arc(&mut self, to: [f64; 3], center_offset: [f64; 2], clockwise: bool, feed: f64) {
         if let Some(last) = self.last_position() {
             let arc_len = arc_sweep_length(last, to, center_offset, clockwise);
             self.stats.estimated_cut_length_mm += arc_len;
@@ -140,15 +139,12 @@ impl ToolpathSegment {
     }
 }
 
-fn arc_sweep_length(
-    from: [f64; 3],
-    to: [f64; 3],
-    center_offset: [f64; 2],
-    clockwise: bool,
-) -> f64 {
+fn arc_sweep_length(from: [f64; 3], to: [f64; 3], center_offset: [f64; 2], clockwise: bool) -> f64 {
     let cx = from[0] + center_offset[0];
     let cy = from[1] + center_offset[1];
-    let r = (center_offset[0].powi(2) + center_offset[1].powi(2)).sqrt().max(1e-6);
+    let r = (center_offset[0].powi(2) + center_offset[1].powi(2))
+        .sqrt()
+        .max(1e-6);
     let a0 = (from[1] - cy).atan2(from[0] - cx);
     let a1 = (to[1] - cy).atan2(to[0] - cx);
     let mut sweep = a1 - a0;
