@@ -21,6 +21,7 @@ let coaxialRows = [];
 let analyzeGen = 0;
 let systemTestsDone = false;
 let ipMaskingEnabled = false;
+let selectedRow = 0;
 
 const progress = createProgressDriver($("progress-bar"), $("progress"));
 const viewer3d = createViewer3d($("canvas-3d"));
@@ -116,6 +117,11 @@ function fmtNum(n, d = 3) {
   return n.toFixed(d);
 }
 
+function diameterMm(radius) {
+  if (radius == null || !Number.isFinite(radius)) return "";
+  return (radius * 2).toFixed(4);
+}
+
 function buildCoaxialRows(holes) {
   return holes.map((f, i) => {
     const o = vec3(f.axis_origin);
@@ -125,7 +131,7 @@ function buildCoaxialRows(holes) {
       kind: f.kind ?? "",
       label: f.label ?? "",
       face_ids: (f.face_ids ?? []).join(","),
-      radius_mm: f.radius != null ? f.radius.toFixed(4) : "",
+      radius_mm: diameterMm(f.radius),
       depth_mm: f.depth != null ? f.depth.toFixed(4) : "",
       ox: o ? fmtNum(o[0]) : "",
       oy: o ? fmtNum(o[1]) : "",
@@ -136,6 +142,19 @@ function buildCoaxialRows(holes) {
       seg: f.face_ids?.length ?? 0,
     };
   });
+}
+
+function selectHoleRow(index) {
+  const rows = $("coaxial-table-body")?.querySelectorAll("tr");
+  if (!rows?.length) return;
+  selectedRow = Math.max(0, Math.min(index, rows.length - 1));
+  rows.forEach((tr, i) => tr.classList.toggle("selected", i === selectedRow));
+  viewer3d.highlightHole?.(selectedRow);
+  const row = coaxialRows[selectedRow];
+  const label = $("viewer-hole-label");
+  if (label && row) {
+    label.textContent = `Ø${row.radius_mm} · ${row.depth_mm} mm`;
+  }
 }
 
 function renderCoaxialTable(data) {
@@ -164,24 +183,30 @@ function renderCoaxialTable(data) {
 
   tbody.innerHTML = coaxialRows
     .map(
-      (r) => `
-    <tr>
+      (r, i) => `
+    <tr data-index="${i}" class="${i === selectedRow ? "selected" : ""}">
       <td>${r.index}</td>
       <td>${escapeHtml(r.kind)}</td>
       <td class="col-label">${escapeHtml(r.label)}</td>
-      <td class="col-ids">${escapeHtml(r.face_ids)}</td>
+      <td class="col-detail col-ids">${escapeHtml(r.face_ids)}</td>
       <td>${escapeHtml(r.radius_mm)}</td>
       <td>${escapeHtml(r.depth_mm)}</td>
-      <td>${escapeHtml(r.ox)}</td>
-      <td>${escapeHtml(r.oy)}</td>
-      <td>${escapeHtml(r.oz)}</td>
-      <td>${escapeHtml(r.dx)}</td>
-      <td>${escapeHtml(r.dy)}</td>
-      <td>${escapeHtml(r.dz)}</td>
+      <td class="col-detail">${escapeHtml(r.ox)}</td>
+      <td class="col-detail">${escapeHtml(r.oy)}</td>
+      <td class="col-detail">${escapeHtml(r.oz)}</td>
+      <td class="col-detail">${escapeHtml(r.dx)}</td>
+      <td class="col-detail">${escapeHtml(r.dy)}</td>
+      <td class="col-detail">${escapeHtml(r.dz)}</td>
       <td>${r.seg}</td>
     </tr>`
     )
     .join("");
+
+  tbody.querySelectorAll("tr").forEach((tr) => {
+    tr.addEventListener("click", () => selectHoleRow(Number(tr.dataset.index)));
+  });
+
+  if (coaxialRows.length) selectHoleRow(selectedRow);
 }
 
 function renderDiagnostics(data) {
@@ -189,7 +214,7 @@ function renderDiagnostics(data) {
   if (!el) return;
   const s = data.stats;
   const lines = [];
-  if (s.parse_errors > 0) lines.push(`${s.parse_errors} parse skips`);
+  if (s.parse_errors > 0) lines.push(`${s.parse_errors} entities skipped during parse`);
   if (!lines.length) {
     el.classList.add("hidden");
     el.innerHTML = "";
@@ -372,6 +397,7 @@ function presentResults(data) {
   requestAnimationFrame(() => {
     viewer3d.load(data);
     viewer3d.resize?.();
+    if (data.coaxial_holes?.length) selectHoleRow(0);
   });
 }
 
@@ -442,11 +468,12 @@ async function analyzeText(text, name, size) {
     $("dropzone")?.classList.remove("hidden");
     $("status-bar")?.classList.remove("hidden");
     const label = $("drop-label");
-    if (label) label.textContent = name;
+    if (label) label.textContent = truncateName(name);
+    selectedRow = 0;
 
     const coaxial = lastData.coaxial_holes?.length ?? 0;
     const unit = lastData.stats?.length_unit ?? "mm";
-    $("file-meta").textContent = `${name} · ${formatBytes(size)} · ${ms} ms · ${coaxial} coaxial · ${unit}`;
+    $("file-meta").textContent = `${truncateName(name, 48)} · ${formatBytes(size)} · ${ms} ms · ${coaxial} coaxial · ${unit}`;
     setMessage("");
   } catch (e) {
     if (gen !== analyzeGen) return;
@@ -460,6 +487,15 @@ async function analyzeText(text, name, size) {
       progress.reset();
     }
   }
+}
+
+function truncateName(name, max = 36) {
+  if (!name || name.length <= max) return name;
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  const stem = ext ? name.slice(0, -ext.length) : name;
+  const keep = max - ext.length - 1;
+  if (keep < 8) return name.slice(0, max - 1) + "…";
+  return stem.slice(0, keep) + "…" + ext;
 }
 
 function formatBytes(n) {
@@ -488,6 +524,12 @@ $("copy-manifest")?.addEventListener("click", async () => {
 
 initTheme();
 initIpMaskToggle();
+
+$("axes-toggle")?.addEventListener("click", (e) => {
+  const on = !document.body.classList.contains("show-axis-cols");
+  document.body.classList.toggle("show-axis-cols", on);
+  e.currentTarget.setAttribute("aria-pressed", on ? "true" : "false");
+});
 
 function openFilePicker() {
   const input = $("file-input");

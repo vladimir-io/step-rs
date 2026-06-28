@@ -1,5 +1,5 @@
 /**
- * High-fidelity part preview — tessellated B-rep mesh + coaxial bore overlays.
+ * Part preview — opaque tessellated mesh, focused x-ray on selected bore.
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -47,7 +47,7 @@ function hasSolidMesh(mesh) {
 }
 
 export function createViewer3d(canvas) {
-  if (!canvas) return { load() {}, resize() {}, refresh() {} };
+  if (!canvas) return { load() {}, resize() {}, refresh() {}, highlightHole() {} };
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -58,7 +58,7 @@ export function createViewer3d(canvas) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -66,15 +66,11 @@ export function createViewer3d(canvas) {
   pmrem.compileEquirectangularShader();
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500000);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.055;
-  controls.rotateSpeed = 0.55;
-  controls.panSpeed = 0.65;
-  controls.zoomSpeed = 0.85;
-  controls.minDistance = 1;
-  controls.maxDistance = 8000;
+  controls.dampingFactor = 0.06;
+  controls.rotateSpeed = 0.5;
 
   const partGroup = new THREE.Group();
   const overlayGroup = new THREE.Group();
@@ -84,6 +80,7 @@ export function createViewer3d(canvas) {
   let envTexture = null;
   let lights = [];
   let lastAnalysis = null;
+  let selectedHole = 0;
   let raf = 0;
   let running = false;
   let partScale = 1;
@@ -91,11 +88,12 @@ export function createViewer3d(canvas) {
   function applyTheme() {
     const t = canvasTheme();
     scene.background = new THREE.Color(toColor(t.threeBgHex));
-    scene.fog = new THREE.FogExp2(toColor(t.threeBgHex), t.threeFog || 0.00035);
-    renderer.toneMappingExposure = document.documentElement.dataset.theme === "light" ? 1.05 : 1.15;
+    const fogDensity = t.threeFog || 0.00006;
+    scene.fog = fogDensity > 0 ? new THREE.FogExp2(toColor(t.threeBgHex), fogDensity) : null;
+    renderer.toneMappingExposure = document.documentElement.dataset.theme === "light" ? 0.98 : 1.02;
     if (grid) {
       grid.material.color.setHex(toColor(t.threeGrid));
-      grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.45 : 0.28;
+      grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.35 : 0.22;
     }
   }
 
@@ -106,51 +104,38 @@ export function createViewer3d(canvas) {
   }
 
   function partMaterial(t) {
-    return new THREE.MeshPhysicalMaterial({
+    return new THREE.MeshStandardMaterial({
       color: toColor(t.threePart),
-      metalness: 0.72,
-      roughness: 0.26,
-      clearcoat: 0.4,
-      clearcoatRoughness: 0.15,
-      envMapIntensity: 1.15,
+      metalness: 0.42,
+      roughness: 0.48,
+      envMapIntensity: 0.7,
+      transparent: false,
+      opacity: 1,
     });
   }
 
-  function xrayCoreMaterial(accent) {
+  function focusBoreMaterial(accent) {
     return new THREE.MeshPhysicalMaterial({
       color: accent,
       emissive: accent,
-      emissiveIntensity: 2.2,
-      metalness: 0.05,
-      roughness: 0.08,
+      emissiveIntensity: 1.4,
+      metalness: 0,
+      roughness: 0.2,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.62,
       side: THREE.DoubleSide,
       depthWrite: false,
+      depthTest: true,
       toneMapped: false,
     });
   }
 
-  function xrayHaloMaterial(accent) {
+  function markerRingMaterial(accent) {
     return new THREE.MeshBasicMaterial({
       color: accent,
       transparent: true,
-      opacity: 0.14,
-      side: THREE.BackSide,
+      opacity: 0.35,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      toneMapped: false,
-    });
-  }
-
-  function xrayCapMaterial(accent) {
-    return new THREE.MeshBasicMaterial({
-      color: accent,
-      transparent: true,
-      opacity: 0.55,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
       toneMapped: false,
     });
   }
@@ -175,11 +160,50 @@ export function createViewer3d(canvas) {
     mesh.position.copy(origin).addScaledVector(ax, offset + length / 2);
   }
 
-  function addGlowDisc(radius, ax, origin, offset, accent) {
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(radius, 48), xrayCapMaterial(accent));
-    disc.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), ax);
-    disc.position.copy(origin).addScaledVector(ax, offset);
-    overlayGroup.add(disc);
+  function addRing(radius, ax, origin, offset, accent, opacity) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(radius, Math.max(radius * 0.04, 0.15), 8, 48),
+      markerRingMaterial(accent)
+    );
+    ring.material.opacity = opacity;
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), ax);
+    ring.position.copy(origin).addScaledVector(ax, offset);
+    ring.renderOrder = 2;
+    overlayGroup.add(ring);
+  }
+
+  function addCoaxialOverlay(hole, t, mode) {
+    const o = hole.axis_origin;
+    const d = hole.axis_direction;
+    if (!o || !d) return;
+
+    const ox = o.x ?? o[0];
+    const oy = o.y ?? o[1];
+    const oz = o.z ?? o[2];
+    const dx = d.x ?? d[0];
+    const dy = d.y ?? d[1];
+    const dz = d.z ?? d[2];
+    const ax = stepToThree(dx, dy, dz).normalize();
+    const origin = stepToThree(ox, oy, oz);
+    const accent = toColor(t.threeCut || "#5b9aff");
+    const segments = holeSegments(hole);
+    if (!segments.length) return;
+
+    let cursor = 0;
+    for (const seg of segments) {
+      if (mode === "focus") {
+        const coreGeo = new THREE.CylinderGeometry(seg.radius, seg.radius, seg.depth, 48, 1, true);
+        const core = new THREE.Mesh(coreGeo, focusBoreMaterial(accent));
+        orientAlongAxis(core, ax, origin, cursor, seg.depth);
+        core.renderOrder = 2;
+        overlayGroup.add(core);
+        addRing(seg.radius, ax, origin, cursor, accent, 0.85);
+        addRing(seg.radius, ax, origin, cursor + seg.depth, accent, 0.85);
+      } else {
+        addRing(seg.radius * 0.92, ax, origin, cursor, accent, 0.22);
+      }
+      cursor += seg.depth;
+    }
   }
 
   function clearGroup(g) {
@@ -232,57 +256,6 @@ export function createViewer3d(canvas) {
     }
   }
 
-  function addCoaxialOverlay(hole, t) {
-    const o = hole.axis_origin;
-    const d = hole.axis_direction;
-    if (!o || !d) return;
-
-    const ox = o.x ?? o[0];
-    const oy = o.y ?? o[1];
-    const oz = o.z ?? o[2];
-    const dx = d.x ?? d[0];
-    const dy = d.y ?? d[1];
-    const dz = d.z ?? d[2];
-    const ax = stepToThree(dx, dy, dz).normalize();
-    const origin = stepToThree(ox, oy, oz);
-    const accent = toColor(t.threeCut || "#5b9aff");
-    const segments = holeSegments(hole);
-    if (!segments.length) return;
-
-    let cursor = 0;
-    for (const seg of segments) {
-      const coreGeo = new THREE.CylinderGeometry(seg.radius, seg.radius, seg.depth, 56, 1, true);
-      const core = new THREE.Mesh(coreGeo, xrayCoreMaterial(accent));
-      orientAlongAxis(core, ax, origin, cursor, seg.depth);
-      overlayGroup.add(core);
-
-      const haloGeo = new THREE.CylinderGeometry(seg.radius * 1.12, seg.radius * 1.12, seg.depth * 1.02, 56, 1, true);
-      const halo = new THREE.Mesh(haloGeo, xrayHaloMaterial(accent));
-      orientAlongAxis(halo, ax, origin, cursor, seg.depth);
-      overlayGroup.add(halo);
-
-      addGlowDisc(seg.radius * 1.04, ax, origin, cursor, accent);
-      addGlowDisc(seg.radius * 1.04, ax, origin, cursor + seg.depth, accent);
-
-      const beamGeo = new THREE.CylinderGeometry(seg.radius * 0.08, seg.radius * 0.08, seg.depth, 12);
-      const beam = new THREE.Mesh(
-        beamGeo,
-        new THREE.MeshBasicMaterial({
-          color: accent,
-          transparent: true,
-          opacity: 0.35,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-          toneMapped: false,
-        })
-      );
-      orientAlongAxis(beam, ax, origin, cursor, seg.depth);
-      overlayGroup.add(beam);
-
-      cursor += seg.depth;
-    }
-  }
-
   function fitCamera(box) {
     if (box.isEmpty()) return;
     const size = new THREE.Vector3();
@@ -292,16 +265,16 @@ export function createViewer3d(canvas) {
     partScale = Math.max(size.x, size.y, size.z, 1);
 
     const fov = (camera.fov * Math.PI) / 180;
-    const dist = (partScale / (2 * Math.tan(fov / 2))) * 1.45;
-    camera.position.set(center.x + dist * 0.72, center.y + dist * 0.52, center.z + dist * 0.78);
+    const dist = (partScale / (2 * Math.tan(fov / 2))) * 1.35;
+    camera.position.set(center.x + dist * 0.68, center.y + dist * 0.48, center.z + dist * 0.72);
     camera.near = Math.max(partScale * 0.002, 0.05);
     camera.far = Math.max(partScale * 50, 1000);
     camera.updateProjectionMatrix();
 
     controls.target.copy(center);
     controls.update();
-    controls.minDistance = partScale * 0.2;
-    controls.maxDistance = partScale * 15;
+    controls.minDistance = partScale * 0.25;
+    controls.maxDistance = partScale * 12;
 
     repositionLights(center, partScale);
   }
@@ -324,16 +297,16 @@ export function createViewer3d(canvas) {
   }
 
   function addLights(t) {
-    scene.add(new THREE.HemisphereLight(toColor(t.threeKeyHex || "#fafafa"), toColor(t.threeGrid), 0.45));
+    scene.add(new THREE.HemisphereLight(toColor(t.threeKeyHex || "#fafafa"), toColor(t.threeGrid), 0.35));
 
-    const key = new THREE.DirectionalLight(toColor(t.threeKeyHex || "#ffffff"), 1.6);
+    const key = new THREE.DirectionalLight(toColor(t.threeKeyHex || "#ffffff"), 1.35);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     key.shadow.bias = -0.00015;
     key.shadow.normalBias = 0.02;
 
-    const fill = new THREE.DirectionalLight(toColor(t.threePart), 0.4);
-    const rim = new THREE.DirectionalLight(toColor(t.threeCut || "#5b9aff"), 0.35);
+    const fill = new THREE.DirectionalLight(toColor(t.threePart), 0.55);
+    const rim = new THREE.DirectionalLight(toColor(t.threeCut || "#5b9aff"), 0.2);
 
     for (const l of [key, fill, rim]) {
       scene.add(l);
@@ -356,9 +329,9 @@ export function createViewer3d(canvas) {
     const center = new THREE.Vector3();
     box.getCenter(center);
     const span = Math.max(size.x, size.z, partScale) * 2.2;
-    grid = new THREE.GridHelper(span, 32, toColor(t.threeGrid), toColor(t.threeGrid));
+    grid = new THREE.GridHelper(span, 24, toColor(t.threeGrid), toColor(t.threeGrid));
     grid.material.transparent = true;
-    grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.45 : 0.28;
+    grid.material.opacity = document.documentElement.dataset.theme === "light" ? 0.35 : 0.22;
     grid.position.set(center.x, box.min.y - partScale * 0.01, center.z);
     scene.add(grid);
   }
@@ -372,6 +345,9 @@ export function createViewer3d(canvas) {
     const partBox = new THREE.Box3();
     const preview = analysis.preview;
     const mesh = analysis.mesh ?? preview?.mesh;
+    const holes = analysis.coaxial_holes || [];
+
+    if (selectedHole >= holes.length) selectedHole = 0;
 
     if (preview?.bounds?.min?.[0] != null) {
       partBox.expandByPoint(stepToThree(preview.bounds.min[0], preview.bounds.min[1], preview.bounds.min[2]));
@@ -384,6 +360,7 @@ export function createViewer3d(canvas) {
         const solid = new THREE.Mesh(geo, partMaterial(t));
         solid.castShadow = true;
         solid.receiveShadow = true;
+        solid.renderOrder = 0;
         partGroup.add(solid);
         partBox.expandByObject(solid);
       }
@@ -391,23 +368,9 @@ export function createViewer3d(canvas) {
       addAnalyticFallback(preview, t, partBox);
     }
 
-    for (const h of analysis.coaxial_holes || []) {
-      addCoaxialOverlay(h, t);
-      const r = h.radius ?? 0;
-      const depth = h.depth ?? 0;
-      if (r > 0 && depth > 0 && h.axis_origin && h.axis_direction) {
-        const o = h.axis_origin;
-        const d = h.axis_direction;
-        const ax = stepToThree(d.x ?? d[0], d.y ?? d[1], d.z ?? d[2]).normalize();
-        const origin = stepToThree(o.x ?? o[0], o.y ?? o[1], o.z ?? o[2]);
-        const end = origin.clone().addScaledVector(ax, depth);
-        partBox.expandByPoint(origin);
-        partBox.expandByPoint(end);
-        const perp = new THREE.Vector3(1, 0, 0).cross(ax).normalize();
-        if (perp.lengthSq() < 0.01) perp.set(0, 1, 0).cross(ax).normalize();
-        partBox.expandByPoint(origin.clone().addScaledVector(perp, r));
-      }
-    }
+    holes.forEach((h, i) => {
+      addCoaxialOverlay(h, t, i === selectedHole ? "focus" : "marker");
+    });
 
     rebuildGrid(partBox);
     fitCamera(partBox.isEmpty() ? new THREE.Box3().setFromObject(partGroup) : partBox);
@@ -415,11 +378,19 @@ export function createViewer3d(canvas) {
 
   function load(analysis) {
     try {
+      selectedHole = 0;
       loadScene(analysis);
       startLoop();
     } catch {
       /* viewer optional */
     }
+  }
+
+  function highlightHole(index) {
+    if (!lastAnalysis?.coaxial_holes?.length) return;
+    const n = lastAnalysis.coaxial_holes.length;
+    selectedHole = ((index % n) + n) % n;
+    loadScene(lastAnalysis);
   }
 
   function frame() {
@@ -477,6 +448,7 @@ export function createViewer3d(canvas) {
     load,
     resize,
     refresh,
+    highlightHole,
     dispose() {
       stopLoop();
       ro?.disconnect();

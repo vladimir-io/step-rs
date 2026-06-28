@@ -29,7 +29,7 @@
         } catch (e) {}
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=22" />
+    <link rel="stylesheet" href="styles.css?v=23" />
     <script type="importmap">
       {
         "imports": {
@@ -93,11 +93,6 @@
         </section>
 
         <main class="deck hidden" id="workspace">
-          <aside class="system-tests" id="system-tests" aria-label="Regression status">
-            <h2 class="system-tests-title">regression</h2>
-            <ul class="system-tests-list" id="system-tests-list"></ul>
-          </aside>
-
           <nav class="metrics-bar metrics-bar-compact" id="metrics" aria-label="Parse summary">
             <div class="metric-card">
               <span class="metric-label">coaxial</span>
@@ -140,10 +135,25 @@
           </section>
 
           <div class="workspace-body">
+            <aside class="viewer-panel" id="viz" aria-label="Part preview">
+              <div class="vp">
+                <div class="vp-chrome">
+                  <span class="vp-title">part</span>
+                  <span class="vp-sub" id="viewer-hole-label">click a row</span>
+                </div>
+                <canvas id="canvas-3d" class="vp-canvas" aria-label="3D part"></canvas>
+              </div>
+            </aside>
+
             <section class="coaxial-grid-panel" id="coaxial-dashboard" aria-label="Coaxial holes">
               <div class="coaxial-grid-head">
-                <h2 class="panel-title">detect_coaxial_holes</h2>
-                <p class="coaxial-grid-sub" id="coaxial-count-label">—</p>
+                <div>
+                  <h2 class="panel-title">holes</h2>
+                  <p class="coaxial-grid-sub" id="coaxial-count-label">—</p>
+                </div>
+                <div class="coaxial-grid-actions">
+                  <button type="button" class="axes-toggle" id="axes-toggle" aria-pressed="false">axes</button>
+                </div>
               </div>
               <div id="diag-out" class="diag hidden"></div>
               <div class="coaxial-table-wrap">
@@ -153,35 +163,29 @@
                       <th>#</th>
                       <th>kind</th>
                       <th>label</th>
-                      <th>face_ids</th>
-                      <th>radius_mm</th>
-                      <th>depth_mm</th>
-                      <th>ox</th>
-                      <th>oy</th>
-                      <th>oz</th>
-                      <th>dx</th>
-                      <th>dy</th>
-                      <th>dz</th>
+                      <th class="col-detail">face_ids</th>
+                      <th>Ø mm</th>
+                      <th>depth</th>
+                      <th class="col-detail">ox</th>
+                      <th class="col-detail">oy</th>
+                      <th class="col-detail">oz</th>
+                      <th class="col-detail">dx</th>
+                      <th class="col-detail">dy</th>
+                      <th class="col-detail">dz</th>
                       <th>seg</th>
                     </tr>
                   </thead>
                   <tbody id="coaxial-table-body"></tbody>
                 </table>
-                <p class="coaxial-empty hidden" id="coaxial-empty">detect_coaxial_holes returned [].</p>
+                <p class="coaxial-empty hidden" id="coaxial-empty">no coaxial clusters</p>
               </div>
             </section>
-
-            <aside class="viewer-panel" id="viz" aria-label="Mesh preview">
-              <div class="vp">
-                <div class="vp-chrome">
-                  <span class="vp-title">tessellated mesh</span>
-                </div>
-                <canvas id="canvas-3d" class="vp-canvas" aria-label="3D mesh"></canvas>
-                <p class="vp-hint">orbit · zoom</p>
-              </div>
-            </aside>
           </div>
         </main>
+
+        <aside class="system-tests hidden" id="system-tests" aria-hidden="true">
+          <ul class="system-tests-list" id="system-tests-list"></ul>
+        </aside>
       </div>
 
       <footer class="status hidden" id="status-bar">
@@ -190,6 +194,6 @@
       </footer>
     </div>
 
-    <script type="module" src="app.js?v=22"></script>
+    <script type="module" src="app.js?v=23"></script>
   </body>
 </html>

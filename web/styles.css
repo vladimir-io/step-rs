@@ -36,8 +36,8 @@
   --canvas-label: rgba(161, 161, 170, 0.55);
   --three-bg: #08080e;
   --three-key: #fafafa;
-  --three-fog: 0.00026;
-  --three-part: #c8cad4;
+  --three-fog: 0.00006;
+  --three-part: #6e7380;
   --three-cut: #5b9aff;
   --three-rapid: #52525b;
   --three-grid: #1a1a24;
@@ -87,8 +87,8 @@
   --canvas-label: rgba(71, 85, 105, 0.7);
   --three-bg: #f5f7fc;
   --three-key: #ffffff;
-  --three-fog: 0.00028;
-  --three-part: #64748b;
+  --three-fog: 0.00008;
+  --three-part: #7a8494;
   --three-cut: #1d6ef4;
   --three-rapid: #94a3b8;
   --three-grid: #e2e8f0;
@@ -550,7 +550,7 @@ body.analyzing .landing-drop {
 /* ── deck layout ── */
 .deck {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto 1fr;
   min-height: 0;
   overflow: hidden;
   background: var(--bg);
@@ -605,7 +605,7 @@ body.analyzing .landing-drop {
 
 .workspace-body {
   display: grid;
-  grid-template-columns: 1fr minmax(280px, 38vw);
+  grid-template-columns: minmax(300px, 1.15fr) minmax(280px, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -822,8 +822,54 @@ body.analyzing .landing-drop {
   white-space: nowrap;
 }
 
+.coaxial-table tbody tr {
+  cursor: pointer;
+}
+
 .coaxial-table tbody tr:hover {
   background: var(--surface-2);
+}
+
+.coaxial-table tbody tr.selected {
+  background: var(--accent-dim);
+}
+
+.coaxial-table tbody tr.selected td {
+  color: var(--fg);
+}
+
+.coaxial-table .col-detail {
+  display: none;
+}
+
+body.show-axis-cols .coaxial-table .col-detail {
+  display: table-cell;
+}
+
+.coaxial-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.axes-toggle {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.axes-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#system-tests {
+  display: none;
 }
 
 .coaxial-table .col-label {
@@ -1137,10 +1183,18 @@ body.analyzing .landing-drop {
 
 .vp-title {
   font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--fg-2);
+}
+
+.vp-sub {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  color: var(--muted);
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vp-legend {
