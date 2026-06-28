@@ -13,7 +13,7 @@ pub enum PostProcessor {
     Grbl,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Wcs {
     G54,
     G55,
@@ -21,6 +21,27 @@ pub enum Wcs {
     G57,
     G58,
     G59,
+}
+
+impl<'de> Deserialize<'de> for Wcs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        match value.to_ascii_uppercase().as_str() {
+            "G54" => Ok(Self::G54),
+            "G55" => Ok(Self::G55),
+            "G56" => Ok(Self::G56),
+            "G57" => Ok(Self::G57),
+            "G58" => Ok(Self::G58),
+            "G59" => Ok(Self::G59),
+            other => Err(serde::de::Error::unknown_variant(
+                other,
+                &["G54", "G55", "G56", "G57", "G58", "G59"],
+            )),
+        }
+    }
 }
 
 impl Wcs {
@@ -172,5 +193,24 @@ fn format_line(line: &str, post: &PostOptions, n: u32) -> String {
         format!("N{n} {line}")
     } else {
         line.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PostOptions, Wcs};
+
+    #[test]
+    fn wcs_deserializes_case_insensitive() {
+        for (raw, expected) in [("G54", Wcs::G54), ("g54", Wcs::G54)] {
+            let parsed: Wcs = serde_json::from_str(&format!("\"{raw}\"")).unwrap();
+            assert_eq!(parsed, expected);
+
+            let json = format!(
+                r#"{{"processor":"fanuc","wcs":"{raw}","program_number":1000,"line_numbers":true,"tool_number":1}}"#
+            );
+            let opts: PostOptions = serde_json::from_str(&json).unwrap();
+            assert_eq!(opts.wcs, expected);
+        }
     }
 }

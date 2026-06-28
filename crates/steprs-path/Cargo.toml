@@ -13,6 +13,7 @@ steprs-topology.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 steprs-features.workspace = true
 steprs-core.workspace = true
 steprs-schema.workspace = true

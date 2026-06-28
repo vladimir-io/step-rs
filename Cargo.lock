@@ -347,6 +347,7 @@ name = "steprs-path"
 version = "1.0.0"
 dependencies = [
  "serde",
+ "serde_json",
  "steprs-core",
  "steprs-features",
  "steprs-schema",
