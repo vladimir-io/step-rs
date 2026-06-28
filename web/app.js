@@ -1,26 +1,11 @@
 import {
-  animateNumber,
-  collapseSections,
   createProgressDriver,
-  revealStagger,
   wait,
 } from "./motion.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import { createViewer3d } from "./viewer3d.js";
-import { initLandingScene } from "./landing-scene.js";
-import { playLandingEntrance } from "./landing-motion.js";
-import {
-  celebrateAnalysisComplete,
-  flashMessage,
-  initMicrointeractions,
-  popSystemTestRow,
-  revealManifestPanel,
-  toggleIpMaskDelight,
-} from "./microinteractions.js";
 
 const $ = (id) => document.getElementById(id);
-
-const FLOW_SECTIONS = () => [$("workspace")];
 
 const SAMPLES = {
   "cylinder_block.step": "./samples/cylinder_block.step",
@@ -39,7 +24,6 @@ let ipMaskingEnabled = false;
 
 const progress = createProgressDriver($("progress-bar"), $("progress"));
 const viewer3d = createViewer3d($("canvas-3d"));
-let landingScene = null;
 
 const PHASE_WEIGHTS = {
   data_scan: [0, 65],
@@ -55,20 +39,6 @@ function mapProgress(phase, done, total) {
   const span = hi - lo;
   if (total > 0) return lo + span * Math.min(1, done / total);
   return lo + span * 0.5;
-}
-
-function initPageEntrance() {
-  document.body.classList.add("is-ready");
-  const canvas = $("landing-canvas");
-  if (canvas && !document.body.classList.contains("has-results")) {
-    landingScene = initLandingScene(canvas);
-    playLandingEntrance();
-  }
-}
-
-function stopLandingScene() {
-  landingScene?.destroy();
-  landingScene = null;
 }
 
 async function initWasm() {
@@ -126,7 +96,6 @@ function setMessage(text, isError = false) {
   el.textContent = text;
   el.classList.toggle("error", isError);
   el.classList.toggle("hidden", !text);
-  if (text) flashMessage(el, isError);
 }
 
 function escapeHtml(s) {
@@ -230,16 +199,13 @@ function renderDiagnostics(data) {
   el.innerHTML = lines.map((l) => `<span class="diag-line">${escapeHtml(l)}</span>`).join("");
 }
 
-async function animateMetrics(data) {
+function renderMetrics(data) {
   const s = data.stats;
   const coaxial = data.coaxial_holes?.length ?? 0;
   const b = data.brep;
 
-  await Promise.all([
-    animateNumber($("m-records"), s.record_count, { duration: 300, decimals: 0 }),
-    animateNumber($("m-coaxial"), coaxial, { duration: 300, decimals: 0 }),
-  ]);
-
+  $("m-records").textContent = s.record_count != null ? String(s.record_count) : "—";
+  $("m-coaxial").textContent = String(coaxial);
   if ($("m-faces")) $("m-faces").textContent = b?.face_count != null ? String(b.face_count) : "—";
   if ($("m-protocol")) $("m-protocol").textContent = s.application_protocol || "—";
   if ($("m-unit")) $("m-unit").textContent = s.length_unit ?? "mm";
@@ -256,13 +222,7 @@ function renderSystemTestLists(cases) {
 
   for (const id of ["system-tests-list", "system-tests-landing-list"]) {
     const el = $(id);
-    if (!el) continue;
-    const prev = new Set([...el.querySelectorAll(".system-test-row.pass")].map((r) => r.querySelector(".system-test-name")?.textContent));
-    el.innerHTML = html;
-    [...el.querySelectorAll(".system-test-row")].forEach((row) => {
-      const name = row.querySelector(".system-test-name")?.textContent;
-      if (row.classList.contains("pass") && !prev.has(name)) popSystemTestRow(row);
-    });
+    if (el) el.innerHTML = html;
   }
 }
 
@@ -278,7 +238,7 @@ async function runSystemTests() {
   }
 
   renderSystemTestLists(
-    cases.concat([{ name: "AP214 fixtures", pass: false, detail: "running…" }])
+    cases.concat([{ name: "ap214 fixtures", pass: false, detail: "running…" }])
   );
 
   try {
@@ -297,7 +257,7 @@ async function runSystemTests() {
       renderSystemTestLists(cases);
     }
   } catch (e) {
-    cases.push({ name: "AP214 fixtures", pass: false, detail: String(e) });
+    cases.push({ name: "ap214 fixtures", pass: false, detail: String(e) });
   }
 
   systemTestsDone = true;
@@ -307,7 +267,7 @@ async function runSystemTests() {
 function updateExportButton() {
   const btn = $("export-csv");
   if (!btn) return;
-  btn.textContent = ipMaskingEnabled ? "Export Manifest" : "Export CSV";
+  btn.textContent = ipMaskingEnabled ? "export json" : "export csv";
 }
 
 function refreshManifestPreview() {
@@ -324,10 +284,8 @@ function refreshManifestPreview() {
     return;
   }
 
-  const text = JSON.stringify(lastData.structural_summary, null, 2);
-  pre.textContent = text;
+  pre.textContent = JSON.stringify(lastData.structural_summary, null, 2);
   if (copyBtn) copyBtn.disabled = false;
-  revealManifestPanel(panel);
 }
 
 function initIpMaskToggle() {
@@ -341,7 +299,6 @@ function initIpMaskToggle() {
   }
   toggle.addEventListener("change", () => {
     ipMaskingEnabled = toggle.checked;
-    toggleIpMaskDelight(toggle);
     try {
       localStorage.setItem("steprs-ip-mask", ipMaskingEnabled ? "1" : "0");
     } catch {
@@ -406,13 +363,12 @@ function exportCoaxialCsv() {
   URL.revokeObjectURL(url);
 }
 
-async function presentResults(data) {
-  await revealStagger(FLOW_SECTIONS());
-  await animateMetrics(data);
+function presentResults(data) {
+  $("workspace")?.classList.remove("hidden");
+  renderMetrics(data);
   renderDiagnostics(data);
   renderCoaxialTable(data);
   refreshManifestPreview();
-  celebrateAnalysisComplete();
   requestAnimationFrame(() => {
     viewer3d.load(data);
     viewer3d.resize?.();
@@ -432,10 +388,7 @@ if (typeof ResizeObserver !== "undefined") {
   if (viz) ro.observe(viz);
   if (stage) ro.observe(stage);
 }
-onThemeChange(() => {
-  onLayoutChange();
-  landingScene?.applyTheme?.();
-});
+onThemeChange(onLayoutChange);
 
 const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
 
@@ -446,9 +399,9 @@ function isStepText(text) {
 async function loadSample(name) {
   const url = SAMPLES[name] ?? `./samples/${name}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Sample not found (${res.status})`);
+  if (!res.ok) throw new Error(`sample not found (${res.status})`);
   const text = await res.text();
-  if (!isStepText(text)) throw new Error("Sample file is not valid STEP Part 21");
+  if (!isStepText(text)) throw new Error("not STEP Part 21");
   await analyzeText(text, name, text.length);
 }
 
@@ -459,13 +412,6 @@ async function analyzeText(text, name, size) {
   }
 
   const gen = ++analyzeGen;
-  stopLandingScene();
-  if (!document.body.classList.contains("has-results")) {
-    await collapseSections(FLOW_SECTIONS());
-  }
-  if (gen !== analyzeGen) return;
-
-  document.body.classList.remove("has-results");
   document.body.classList.add("analyzing");
   $("dropzone")?.classList.add("is-busy");
   setMessage("");
@@ -490,7 +436,7 @@ async function analyzeText(text, name, size) {
     await progress.finish();
     if (gen !== analyzeGen) return;
 
-    await presentResults(lastData);
+    presentResults(lastData);
     document.body.classList.add("has-results");
     $("landing")?.classList.add("hidden");
     $("dropzone")?.classList.remove("hidden");
@@ -509,7 +455,7 @@ async function analyzeText(text, name, size) {
     if (gen === analyzeGen) {
       document.body.classList.remove("analyzing");
       $("dropzone")?.classList.remove("is-busy");
-      await wait(300);
+      await wait(200);
       $("progress")?.classList.add("hidden");
       progress.reset();
     }
@@ -531,7 +477,7 @@ $("copy-manifest")?.addEventListener("click", async () => {
     await navigator.clipboard.writeText(text);
     const btn = $("copy-manifest");
     const prev = btn.textContent;
-    btn.textContent = "Copied";
+    btn.textContent = "copied";
     setTimeout(() => {
       btn.textContent = prev;
     }, 1200);
@@ -541,8 +487,6 @@ $("copy-manifest")?.addEventListener("click", async () => {
 });
 
 initTheme();
-initPageEntrance();
-initMicrointeractions();
 initIpMaskToggle();
 
 function openFilePicker() {
@@ -555,22 +499,22 @@ function openFilePicker() {
 async function processFile(file) {
   if (!file) return;
   if (file.size === 0) {
-    setMessage("Empty file — drop a valid STEP (.step, .stp, .p21)", true);
+    setMessage("empty file", true);
     return;
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    setMessage("File exceeds 120 MB limit", true);
+    setMessage("file > 120 MB", true);
     return;
   }
   let text;
   try {
     text = await file.text();
   } catch {
-    setMessage("Could not read file", true);
+    setMessage("read failed", true);
     return;
   }
   if (!isStepText(text)) {
-    setMessage("Not a STEP Part 21 file (missing ISO-10303-21 header)", true);
+    setMessage("not ISO-10303-21", true);
     return;
   }
   await analyzeText(text, file.name, file.size);
@@ -579,7 +523,7 @@ async function processFile(file) {
 function bindDropTarget(el) {
   if (!el) return;
   el.addEventListener("click", (e) => {
-    if (e.target.closest(".sample-chip, .landing-dock, .landing-drop-wrap, .landing-sample-cta, #landing-cta, #try-sample, button, a, input")) return;
+    if (e.target.closest(".sample-link, #landing-cta, button, a, input")) return;
     openFilePicker();
   });
   el.addEventListener("keydown", (e) => {
@@ -615,7 +559,7 @@ $("file-input")?.addEventListener("change", () => {
   if (f) processFile(f);
 });
 
-document.querySelectorAll(".sample-chip, .landing-sample-cta").forEach((btn) => {
+document.querySelectorAll(".sample-link").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
     e.stopPropagation();
     const name = btn.dataset.sample;

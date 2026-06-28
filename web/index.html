@@ -3,37 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#0a0a0a" />
     <meta
       name="description"
-      content="steprs extracts coaxial holes and step bores from STEP files in your browser. Local WASM analysis, ITAR-safe manifest export, instant 3D preview — no upload."
+      content="STEP → B-rep → coaxial hole detection in the browser. WASM, local only."
     />
     <meta name="robots" content="index, follow" />
-    <meta name="author" content="steprs" />
-    <meta name="keywords" content="STEP, coaxial hole, B-rep, CNC, AP214, WASM, ITAR, machinability" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://steprs.dev/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="steprs" />
-    <meta property="og:title" content="steprs — coaxial hole extractor" />
+    <meta property="og:title" content="steprs" />
     <meta property="og:url" content="https://steprs.dev/" />
-    <meta property="og:description" content="Local B-rep coaxial hole detection from STEP. ITAR-safe structural manifest. Runs in your browser." />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="steprs — coaxial hole extractor" />
-    <meta name="twitter:description" content="Drop a STEP file. Get coaxial hole parameters instantly — 100% local, zero upload." />
-    <title>steprs — coaxial hole extractor | local STEP analysis</title>
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "steprs",
-        "url": "https://steprs.dev",
-        "applicationCategory": "EngineeringApplication",
-        "operatingSystem": "Web",
-        "description": "Browser-based coaxial hole and step bore extraction from STEP CAD files.",
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
-      }
-    </script>
+    <meta property="og:description" content="Coaxial hole extraction from STEP. Runs locally in WASM." />
+    <title>steprs</title>
     <script>
       (function () {
         try {
@@ -44,23 +25,16 @@
             document.documentElement.setAttribute("data-theme", "light");
           }
           var m = document.querySelector('meta[name="theme-color"]');
-          if (m) m.content = document.documentElement.dataset.theme === "light" ? "#f5f7fc" : "#06060a";
+          if (m) m.content = document.documentElement.dataset.theme === "light" ? "#f4f4f5" : "#0a0a0a";
         } catch (e) {}
       })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;450;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css?v=21" />
+    <link rel="stylesheet" href="styles.css?v=22" />
     <script type="importmap">
       {
         "imports": {
           "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-          "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.7/+esm"
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
         }
       }
     </script>
@@ -71,7 +45,7 @@
         <a class="brand" href="/">steprs</a>
         <div class="command-center">
           <button type="button" class="drop drop-compact hidden" id="dropzone" aria-label="Open another STEP file">
-            <span class="drop-text" id="drop-label">Open STEP</span>
+            <span class="drop-text" id="drop-label">open step</span>
           </button>
         </div>
         <button type="button" class="theme-btn" id="theme-toggle" aria-label="Theme">
@@ -93,112 +67,80 @@
             tabindex="-1"
             aria-hidden="true"
           />
-          <div class="landing-atmosphere" aria-hidden="true">
-            <canvas class="landing-canvas" id="landing-canvas"></canvas>
-            <div class="landing-vignette"></div>
-          </div>
           <div class="landing-main">
-            <p class="landing-eyebrow landing-motion">local · deterministic · b-rep</p>
-            <h1 class="landing-hero">
-              <span class="landing-hero-line"><span class="landing-word landing-motion">Coaxial</span></span>
-              <span class="landing-hero-line landing-hero-accent">
-                <span class="landing-word landing-motion">hole</span>
-                <span class="landing-word landing-motion">extraction</span>
-              </span>
-            </h1>
-            <p class="landing-lede landing-motion">
-              Instant, local face-clustering for holes and step bores. Raw axis, diameter, and depth from STEP — for manual estimating workflows.
+            <h1 class="landing-title">coaxial holes from STEP</h1>
+            <p class="landing-lede">
+              <code>parse_step_file</code> → <code>build_brep</code> → <code>detect_coaxial_holes</code>.
+              Runs in WASM. File stays on your machine.
             </p>
-            <div class="landing-specs landing-motion" aria-hidden="true">
-              <span class="landing-spec"><em>ε</em> 1e−6</span>
-              <span class="landing-spec-sep">·</span>
-              <span class="landing-spec">WASM &lt;50&nbsp;ms</span>
-              <span class="landing-spec-sep">·</span>
-              <span class="landing-spec">zero upload</span>
-            </div>
-            <div class="landing-drop-wrap landing-motion">
-              <button type="button" class="landing-drop" id="landing-cta" aria-describedby="try-sample">
-                <svg class="landing-drop-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 3v12m0 0l4-4m-4 4L8 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                <span class="landing-drop-title">Drop STEP file</span>
-                <span class="landing-drop-sub">.step · .stp · .p21 — local only, never uploaded</span>
-              </button>
-            </div>
-            <button
-              type="button"
-              class="landing-sample-cta landing-motion"
-              id="try-sample"
-              data-sample="cylinder_block.step"
-            >
-              Don't have a STEP file? Try our <span class="landing-sample-name">cylinder_block.step</span> sample
+            <p class="landing-meta">AP203/AP214 · mm · regression ε=1e−6</p>
+            <button type="button" class="landing-drop" id="landing-cta">
+              drop .step / .stp / .p21
             </button>
+            <p class="landing-samples">
+              samples:
+              <button type="button" class="sample-link" data-sample="cylinder_block.step">cylinder_block.step</button>
+              <button type="button" class="sample-link" data-sample="ap214_medium.step">ap214_medium.step</button>
+            </p>
           </div>
 
-          <aside class="system-tests system-tests-landing landing-motion" id="system-tests-landing" aria-label="System test status">
-            <h2 class="system-tests-title">System test status</h2>
+          <aside class="system-tests system-tests-landing" id="system-tests-landing" aria-label="Regression status">
+            <h2 class="system-tests-title">regression</h2>
             <ul class="system-tests-list" id="system-tests-landing-list">
-              <li class="system-test-row pending"><span class="system-test-mark">…</span><span>initializing</span></li>
+              <li class="system-test-row pending"><span class="system-test-mark">…</span><span>loading wasm</span></li>
             </ul>
           </aside>
-
-          <div class="landing-dock landing-motion" role="group" aria-label="Samples">
-            <span class="landing-dock-label">Samples</span>
-            <button type="button" class="sample-chip" data-sample="cylinder_block.step">cylinder</button>
-            <button type="button" class="sample-chip" data-sample="ap214_medium.step">ap214</button>
-          </div>
         </section>
 
-        <main class="deck flow-section hidden" id="workspace">
-          <aside class="system-tests" id="system-tests" aria-label="System test status">
-            <h2 class="system-tests-title">System test status</h2>
+        <main class="deck hidden" id="workspace">
+          <aside class="system-tests" id="system-tests" aria-label="Regression status">
+            <h2 class="system-tests-title">regression</h2>
             <ul class="system-tests-list" id="system-tests-list"></ul>
           </aside>
 
           <nav class="metrics-bar metrics-bar-compact" id="metrics" aria-label="Parse summary">
             <div class="metric-card">
-              <span class="metric-label">Coaxial</span>
+              <span class="metric-label">coaxial</span>
               <span class="metric-value" id="m-coaxial">—</span>
             </div>
             <div class="metric-card">
-              <span class="metric-label">Faces</span>
+              <span class="metric-label">faces</span>
               <span class="metric-value" id="m-faces">—</span>
             </div>
             <div class="metric-card">
-              <span class="metric-label">Protocol</span>
+              <span class="metric-label">protocol</span>
               <span class="metric-value metric-sm" id="m-protocol">—</span>
             </div>
             <div class="metric-card">
-              <span class="metric-label">Entities</span>
+              <span class="metric-label">entities</span>
               <span class="metric-value" id="m-records">—</span>
             </div>
             <div class="metric-card">
-              <span class="metric-label">Unit</span>
+              <span class="metric-label">unit</span>
               <span class="metric-value metric-sm" id="m-unit">—</span>
             </div>
             <div class="metric-card metric-card-action metric-card-export">
               <label class="ip-mask-toggle" id="ip-mask-label">
                 <input type="checkbox" id="ip-mask-toggle" />
-                <span class="ip-mask-label-text">Local IP Masking (ITAR)</span>
+                <span class="ip-mask-label-text">structural_summary</span>
               </label>
-              <button type="button" class="action-btn action-btn-primary" id="export-csv" disabled>Export CSV</button>
+              <button type="button" class="action-btn action-btn-primary" id="export-csv" disabled>export</button>
             </div>
           </nav>
 
-          <section class="manifest-panel hidden" id="manifest-panel" aria-label="ITAR structural manifest">
+          <section class="manifest-panel hidden" id="manifest-panel" aria-label="Structural summary">
             <div class="manifest-head">
               <div>
-                <h2 class="panel-title">Structural manifest</h2>
-                <p class="manifest-sub">Context-free output — no coordinates, normals, or face IDs</p>
+                <h2 class="panel-title">structural_summary</h2>
+                <p class="manifest-sub">no axis_origin, axis_direction, or face_ids</p>
               </div>
-              <button type="button" class="action-btn" id="copy-manifest" disabled>Copy JSON</button>
+              <button type="button" class="action-btn" id="copy-manifest" disabled>copy json</button>
             </div>
             <pre class="manifest-preview" id="manifest-preview" tabindex="0"></pre>
           </section>
 
           <div class="workspace-body">
-            <section class="coaxial-grid-panel" id="coaxial-dashboard" aria-label="Coaxial hole parameters">
+            <section class="coaxial-grid-panel" id="coaxial-dashboard" aria-label="Coaxial holes">
               <div class="coaxial-grid-head">
                 <h2 class="panel-title">detect_coaxial_holes</h2>
                 <p class="coaxial-grid-sub" id="coaxial-count-label">—</p>
@@ -225,18 +167,17 @@
                   </thead>
                   <tbody id="coaxial-table-body"></tbody>
                 </table>
-                <p class="coaxial-empty hidden" id="coaxial-empty">detect_coaxial_holes returned no clusters for this model.</p>
+                <p class="coaxial-empty hidden" id="coaxial-empty">detect_coaxial_holes returned [].</p>
               </div>
             </section>
 
-            <aside class="viewer-panel" id="viz" aria-label="3D part preview">
-              <div class="vp vp-hero">
+            <aside class="viewer-panel" id="viz" aria-label="Mesh preview">
+              <div class="vp">
                 <div class="vp-chrome">
-                  <span class="vp-title">Part preview</span>
-                  <span class="vp-badge" id="viewer-badge">3D</span>
+                  <span class="vp-title">tessellated mesh</span>
                 </div>
-                <canvas id="canvas-3d" class="vp-canvas" aria-label="Interactive 3D part model"></canvas>
-                <p class="vp-hint">drag to orbit · scroll to zoom</p>
+                <canvas id="canvas-3d" class="vp-canvas" aria-label="3D mesh"></canvas>
+                <p class="vp-hint">orbit · zoom</p>
               </div>
             </aside>
           </div>
@@ -249,6 +190,6 @@
       </footer>
     </div>
 
-    <script type="module" src="app.js?v=21"></script>
+    <script type="module" src="app.js?v=22"></script>
   </body>
 </html>

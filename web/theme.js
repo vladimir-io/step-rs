@@ -1,6 +1,3 @@
-import { prefersReducedMotion } from "./motion.js";
-import { animateThemeToggle } from "./microinteractions.js";
-
 const STORAGE_KEY = "steprs-theme";
 
 export function getTheme() {
@@ -18,7 +15,7 @@ function applyTheme(next) {
   }
   document.querySelector('meta[name="theme-color"]')?.setAttribute(
     "content",
-    next === "light" ? "#f5f7fc" : "#06060a"
+    next === "light" ? "#f4f4f5" : "#0a0a0a"
   );
   window.dispatchEvent(new CustomEvent("steprs-theme", { detail: next }));
 }
@@ -26,29 +23,11 @@ function applyTheme(next) {
 export function setTheme(theme) {
   const next = theme === "light" ? "light" : "dark";
   if (next === getTheme()) return;
-
-  const reduced = prefersReducedMotion();
-  const root = document.documentElement;
-  const commit = () => applyTheme(next);
-
-  if (!reduced && document.startViewTransition) {
-    document.startViewTransition(commit);
-    return;
-  }
-
-  if (!reduced) {
-    root.classList.add("theme-transitioning");
-    commit();
-    window.setTimeout(() => root.classList.remove("theme-transitioning"), 480);
-    return;
-  }
-
-  commit();
+  applyTheme(next);
 }
 
 export function toggleTheme(btn) {
   setTheme(getTheme() === "light" ? "dark" : "light");
-  if (btn) animateThemeToggle(btn);
 }
 
 export function initTheme() {
@@ -62,8 +41,7 @@ export function initTheme() {
 
 function updateThemeButton(btn) {
   const light = getTheme() === "light";
-  btn.setAttribute("aria-label", light ? "Switch to dark mode" : "Switch to light mode");
-  btn.setAttribute("title", light ? "Dark mode" : "Light mode");
+  btn.setAttribute("aria-label", light ? "dark" : "light");
   btn.dataset.mode = light ? "light" : "dark";
 }
 

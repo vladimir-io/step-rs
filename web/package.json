@@ -7,7 +7,6 @@
     "test:e2e:install": "playwright install chromium"
   },
   "devDependencies": {
-    "gsap": "3.12.7",
     "playwright": "1.49.1"
   }
 }
