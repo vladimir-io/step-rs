@@ -109,19 +109,11 @@ pub fn verify_sample(content: &str, expect: &SampleExpect) -> VerifyResult {
     let cache = SchemaCache::build(&store);
     let brep = build_brep(&store, &cache);
     if brep.faces.len() < expect.min_faces {
-        return fail(format!(
-            "faces {} < {}",
-            brep.faces.len(),
-            expect.min_faces
-        ));
+        return fail(format!("faces {} < {}", brep.faces.len(), expect.min_faces));
     }
 
     let coaxial = detect_coaxial_holes(&brep);
-    let max_segments = coaxial
-        .iter()
-        .map(|f| f.face_ids.len())
-        .max()
-        .unwrap_or(0);
+    let max_segments = coaxial.iter().map(|f| f.face_ids.len()).max().unwrap_or(0);
 
     if expect.require_coaxial_cluster {
         if coaxial.is_empty() {
@@ -170,11 +162,7 @@ pub fn run_customer_regression() -> Vec<VerifyResult> {
     customer_regression_specs()
         .iter()
         .map(|spec| {
-            let path = format!(
-                "{}/../../samples/{}",
-                env!("CARGO_MANIFEST_DIR"),
-                spec.name
-            );
+            let path = format!("{}/../../samples/{}", env!("CARGO_MANIFEST_DIR"), spec.name);
             let content = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("read {}: {e}", spec.name));
             verify_sample(&content, spec)

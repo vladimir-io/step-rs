@@ -4,8 +4,8 @@ mod regression;
 mod web;
 
 pub use regression::{
-    customer_regression_specs, cylinder_block_spec, run_cylinder_block_regression,
-    run_customer_regression, run_system_tests, verify_sample, SampleExpect, SystemTestStatus,
+    customer_regression_specs, cylinder_block_spec, run_customer_regression,
+    run_cylinder_block_regression, run_system_tests, verify_sample, SampleExpect, SystemTestStatus,
     VerifyResult,
 };
 pub use web::{RegistrySummary, WebAnalysisResult, WebParseStats};

@@ -4,7 +4,11 @@ use std::path::PathBuf;
 use steprs::{analyze_step, parse_only, run_system_tests};
 
 #[derive(Parser)]
-#[command(name = "steprs", version, about = "STEP B-rep coaxial hole extractor — steprs.dev")]
+#[command(
+    name = "steprs",
+    version,
+    about = "STEP B-rep coaxial hole extractor — steprs.dev"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
