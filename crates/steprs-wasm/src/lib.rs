@@ -49,7 +49,7 @@ pub fn analyze_step(content: &str) -> Result<String, JsValue> {
     analyze_web_json(content).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Legacy alias — options JSON is ignored.
+/// Legacy alias - options JSON is ignored.
 #[wasm_bindgen(js_name = analyzeStepOptions)]
 pub fn analyze_step_options(content: &str, _options_json: &str) -> Result<String, JsValue> {
     analyze_web_json(content).map_err(|e| JsValue::from_str(&e.to_string()))

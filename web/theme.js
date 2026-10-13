@@ -1,6 +1,3 @@
-import { prefersReducedMotion } from "./motion.js";
-import { animateThemeToggle } from "./microinteractions.js";
-
 const STORAGE_KEY = "steprs-theme";
 
 export function getTheme() {
@@ -18,7 +15,7 @@ function applyTheme(next) {
   }
   document.querySelector('meta[name="theme-color"]')?.setAttribute(
     "content",
-    next === "light" ? "#f5f7fc" : "#06060a"
+    next === "light" ? "#f2f1ee" : "#0a0a0a"
   );
   window.dispatchEvent(new CustomEvent("steprs-theme", { detail: next }));
 }
@@ -26,29 +23,11 @@ function applyTheme(next) {
 export function setTheme(theme) {
   const next = theme === "light" ? "light" : "dark";
   if (next === getTheme()) return;
-
-  const reduced = prefersReducedMotion();
-  const root = document.documentElement;
-  const commit = () => applyTheme(next);
-
-  if (!reduced && document.startViewTransition) {
-    document.startViewTransition(commit);
-    return;
-  }
-
-  if (!reduced) {
-    root.classList.add("theme-transitioning");
-    commit();
-    window.setTimeout(() => root.classList.remove("theme-transitioning"), 480);
-    return;
-  }
-
-  commit();
+  applyTheme(next);
 }
 
 export function toggleTheme(btn) {
   setTheme(getTheme() === "light" ? "dark" : "light");
-  if (btn) animateThemeToggle(btn);
 }
 
 export function initTheme() {
@@ -62,8 +41,7 @@ export function initTheme() {
 
 function updateThemeButton(btn) {
   const light = getTheme() === "light";
-  btn.setAttribute("aria-label", light ? "Switch to dark mode" : "Switch to light mode");
-  btn.setAttribute("title", light ? "Dark mode" : "Light mode");
+  btn.setAttribute("aria-label", light ? "dark" : "light");
   btn.dataset.mode = light ? "light" : "dark";
 }
 
@@ -77,21 +55,9 @@ export function canvasTheme() {
     return parseInt(fallback.replace("#", ""), 16);
   };
   return {
-    bg: v("--canvas-bg"),
-    grid: v("--canvas-grid"),
-    gridStrong: v("--canvas-grid-strong"),
-    cut: v("--canvas-cut"),
-    rapid: v("--canvas-rapid"),
-    tip: v("--canvas-tip"),
-    preview: v("--canvas-preview"),
-    label: v("--canvas-label"),
     threeBgHex: v("--three-bg") || "#111113",
-    threeFog: parseFloat(v("--three-fog")) || 0.00035,
-    threePart: hex("--three-part", "#c8cdd4"),
     threeCut: hex("--three-cut", "#4a9eff"),
-    threeRapid: hex("--three-rapid", "#636366"),
     threeGrid: hex("--three-grid", "#2c2c2e"),
-    threeKeyHex: hex("--three-key", "#f5f5f7"),
   };
 }
 

@@ -1,6 +1,6 @@
 ISO-10303-21;
 HEADER;
-FILE_DESCRIPTION(('steprs sample — coaxial cylinder bore'),'2;1');
+FILE_DESCRIPTION(('steprs sample - coaxial cylinder bore'),'2;1');
 FILE_NAME('cylinder_block.step','2026-06-03T12:00:00',('steprs'),('steprs.dev'),
 'steprs','steprs','');
 FILE_SCHEMA(('CONFIG_CONTROL_DESIGN'));

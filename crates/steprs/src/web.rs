@@ -1,4 +1,4 @@
-//! Slim analysis payload for browser / WASM — coaxial holes and B-rep summary only.
+//! Slim analysis payload for browser / WASM - coaxial holes and B-rep summary only.
 
 use serde::Serialize;
 use steprs_features::{ManufacturingFeature, ScenePreview, StructuralSummary};

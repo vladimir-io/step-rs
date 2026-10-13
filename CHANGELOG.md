@@ -1,25 +1,25 @@
 # Changelog
 
-## 1.0.0 — 2026-06-27
+## 1.1.0 (2026-10-13)
 
-First public release.
+Coaxial / stepped hole detection only.
 
-### Web app
-- Drop-zone STEP import with sample files
-- 3D part + toolpath preview (WebGL)
-- XY / XZ path playback with stock-removal heatmap
-- G-code output with Fanuc, Haas, GRBL, and ISO post-processors
-- NC validation, copy, and download
-- Dark / light theme
+### Web
+- Landing: drop zone, one sample, FAQ
+- Hole table: kind, label, Ø, depth, segments
+- OpenCascade tessellation (`occt-import-js`) with Rust mesh fallback
+- `llms.txt`, JSON-LD, Open Graph / Twitter cards
+- Removed ITAR/manifest UI, landing regression panel, axes columns
 
 ### Engine
-- Streaming STEP parser (AP214 / AP242)
-- B-rep topology, coaxial bore + planar pocket detection
-- UV-frame zigzag toolpaths with stepdown
-- Swept-disc stock simulation
-- WASM bindings for browser worker offload
+- Streaming STEP parser (AP203 / AP214)
+- B-rep + coaxial bore detection
+- WASM worker + CLI analyze
 
-### Tooling
-- `steprs-cli` for headless analysis
-- Playwright E2E smoke tests
-- GitHub Actions CI + Pages deploy
+### Dropped from product UI
+- CAM / toolpath / G-code / stock simulation
+- Browser regression dashboard (still in `cargo test` / CLI)
+
+## 1.0.0 (2026-06-27)
+
+First public release.

@@ -204,7 +204,7 @@ mod tests {
     fn coaxial_step() -> ManufacturingFeature {
         ManufacturingFeature {
             kind: ManufacturingFeatureKind::BlindHole,
-            label: "Coaxial step bore — 2 segments, Ø25.40 → Ø12.70".into(),
+            label: "Coaxial step bore - 2 segments, Ø25.40 → Ø12.70".into(),
             face_ids: smallvec![100, 101],
             axis_origin: Some(steprs_schema::Vec3::new(0.0, 0.0, 0.0)),
             axis_direction: Some(steprs_schema::Vec3::new(0.0, 0.0, 1.0)),

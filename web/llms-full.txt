@@ -1,0 +1,30 @@
+# steprs
+
+Browser tool for coaxial / stepped hole detection in ISO 10303-21 STEP files. Runs in WebAssembly. No upload. Not CAM.
+
+## Pipeline
+
+1. Parse Part 21 into an arena store
+2. Build B-rep (`build_brep`)
+3. Detect coaxial clusters (`detect_coaxial_holes`)
+4. Return JSON for table + viewer
+5. Tessellate with OpenCascade in the browser when possible
+
+## Output fields
+
+- kind (blind / through / etc.)
+- label
+- diameter and depth (mm)
+- segment count
+- axis data available in JSON for the viewer
+
+## Stack
+
+- Rust: steprs-core, steprs-schema, steprs-topology, steprs-features, steprs-wasm, steprs-cli
+- Web: vanilla JS, Three.js, occt-import-js
+- Repo: https://github.com/vladimir-io/step-rs
+- Site: https://steprs.dev
+
+## Non-goals
+
+Toolpaths, stock simulation, G-code, cloud file storage.

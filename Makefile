@@ -3,9 +3,8 @@
 test:
 	cargo test --workspace
 
-test-web: wasm
-	cd web && ln -sf ../samples samples 2>/dev/null || true
-	cd web && npm install --silent 2>/dev/null || true
+test-web: wasm vendor
+	cd web && rm -rf samples && cp -r ../samples samples
 	cd web && npx playwright install chromium 2>/dev/null || true
 	@pkill -f "python3 -m http.server 8765" 2>/dev/null || true
 	cd web && python3 -m http.server 8765 >/dev/null 2>&1 & echo $$! > .test-server.pid
@@ -25,7 +24,10 @@ analyze:
 wasm:
 	cd web && bash build-wasm.sh
 
-web: wasm
-	cd web && ln -sf ../samples samples 2>/dev/null || true && python3 -m http.server 8080
+vendor:
+	cd web && npm ci && npm run vendor
+
+web: wasm vendor
+	cd web && rm -rf samples && cp -r ../samples samples && python3 -m http.server 8080
 
 serve: web

@@ -1,5 +1,5 @@
 /**
- * Browser smoke test — coaxial grid + system test status.
+ * Browser smoke test - sample load, bore table, viewer mesh, CSV.
  * Run: node e2e.mjs [baseUrl]
  */
 import { chromium } from "playwright";
@@ -12,12 +12,13 @@ const REQUIRED_IDS = [
   "coaxial-table",
   "coaxial-table-body",
   "export-csv",
-  "ip-mask-toggle",
   "canvas-3d",
   "viz",
-  "system-tests-list",
   "m-coaxial",
-  "m-records",
+  "m-time",
+  "landing",
+  "landing-cta",
+  "viewer-status",
 ];
 
 function assert(cond, msg) {
@@ -42,54 +43,63 @@ async function main() {
       assert(await page.locator(`#${id}`).count(), `Missing #${id}`);
     }
 
+    assert(await page.locator(".landing-brand").count(), "Missing brand hero");
+    assert(await page.locator(".landing-faq").count(), "Missing crawlable FAQ");
+    assert(await page.locator('script[type="application/ld+json"]').count(), "Missing JSON-LD");
+
     await page.waitForFunction(() =>
       !document.getElementById("message")?.textContent?.includes("make wasm")
     );
 
-    await page.waitForFunction(() => {
-      const rows = document.querySelectorAll("#system-tests-landing-list .system-test-row.pass");
-      return rows.length >= 5;
-    });
-
-    await page.click('[data-sample="cylinder_block.step"]');
+    await page.click('[data-sample="ap214_compact.step"]');
     await page.waitForFunction(() => document.body.classList.contains("has-results"));
     await page.waitForFunction(
       () => document.querySelectorAll("#coaxial-table-body tr").length >= 1
+    );
+    await page.waitForFunction(
+      () => Number(document.getElementById("canvas-3d")?.dataset?.meshes) > 0,
+      null,
+      { timeout: 60_000 }
     );
 
     const state = await page.evaluate(() => {
       const rows = [...document.querySelectorAll("#coaxial-table-body tr")].map((tr) =>
         [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim())
       );
-      const tests = [...document.querySelectorAll("#system-tests-list .system-test-row")].map(
-        (li) => ({
-          pass: li.classList.contains("pass"),
-          text: li.textContent?.trim(),
-        })
-      );
       return {
         coaxial: document.getElementById("m-coaxial")?.textContent,
-        records: document.getElementById("m-records")?.textContent,
+        time: document.getElementById("m-time")?.textContent,
         rows,
-        tests,
+        brand: document.querySelector(".landing-brand")?.textContent,
         tableH: document.querySelector(".coaxial-table-wrap")?.clientHeight ?? 0,
         workspaceH: document.getElementById("workspace")?.clientHeight ?? 0,
       };
     });
 
-    assert(state.records === "27", `Expected 27 entities, got ${state.records}`);
-    assert(Number(state.coaxial) >= 1, `Expected coaxial clusters, got ${state.coaxial}`);
-    assert(state.rows.some((r) => r[2]?.includes("Coaxial")), `Coaxial label missing: ${JSON.stringify(state.rows)}`);
-    assert(state.rows[0]?.length >= 13, `Expected dense columns, got ${state.rows[0]?.length}`);
-    assert(state.tests.filter((t) => t.pass).length >= 5, `System tests not all pass: ${JSON.stringify(state.tests)}`);
-    assert(state.tableH > 200, `Table too short: ${state.tableH}`);
+    assert(Number(state.coaxial) >= 1, `Expected bores, got ${state.coaxial}`);
+    assert(state.time?.includes("ms"), `Expected parse time, got ${state.time}`);
+    assert(
+      state.rows.some((r) => r[2]?.toLowerCase().includes("coaxial") || r[1] === "blind"),
+      `Bore row missing: ${JSON.stringify(state.rows)}`
+    );
+    assert(state.rows[0]?.length === 6, `Expected 6 columns, got ${state.rows[0]?.length}`);
+    assert(state.tableH > 160, `Table too short: ${state.tableH}`);
+
+    await page.keyboard.press("ArrowDown");
+    const selected = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll("#coaxial-table-body tr")];
+      return rows.findIndex((tr) => tr.classList.contains("selected"));
+    });
+    assert(selected === 1, `ArrowDown should select row 1, got ${selected}`);
 
     const viewer = await page.evaluate(() => ({
       w: document.getElementById("canvas-3d")?.clientWidth ?? 0,
       h: document.getElementById("canvas-3d")?.clientHeight ?? 0,
+      meshes: document.getElementById("canvas-3d")?.dataset?.meshes,
     }));
     assert(viewer.w > 200, `3D canvas too narrow: ${viewer.w}`);
     assert(viewer.h > 200, `3D canvas too short: ${viewer.h}`);
+    assert(Number(viewer.meshes) > 0, `Expected viewer mesh, got ${viewer.meshes}`);
 
     const [download] = await Promise.all([
       page.waitForEvent("download"),
@@ -100,32 +110,12 @@ async function main() {
       `Unexpected download: ${download.suggestedFilename()}`
     );
 
-    await page.check("#ip-mask-toggle");
-    await page.waitForFunction(() => !document.getElementById("manifest-panel")?.classList.contains("hidden"));
-    const manifest = await page.textContent("#manifest-preview");
-    assert(manifest?.includes("coaxial_step_bore"), "ITAR manifest should show coaxial_step_bore");
-    assert(!manifest?.includes("axis_origin"), "ITAR manifest leaked spatial metadata");
-
-    const [masked] = await Promise.all([
-      page.waitForEvent("download"),
-      page.click("#export-csv"),
-    ]);
-    assert(
-      masked.suggestedFilename() === "steprs-structural-manifest.json",
-      `Unexpected masked download: ${masked.suggestedFilename()}`
-    );
-    const manifestPath = await masked.path();
-    const manifestFile = await (await import("node:fs/promises")).readFile(manifestPath, "utf8");
-    assert(!manifestFile.includes("axis_origin"), "Manifest leaked spatial metadata");
-    assert(manifestFile.includes("coaxial_step_bore"), "Manifest missing classification");
-    assert(manifestFile.includes("volume_limit_mm3"), "Manifest missing volumetric limits");
-
     const blocking = errors.filter(
       (e) => !e.includes("favicon") && !e.includes("Failed to load resource")
     );
     assert(blocking.length === 0, `Browser errors:\n${blocking.join("\n")}`);
 
-    console.log("PASS — coaxial grid, system tests, CSV export");
+    console.log("PASS - bore table, keyboard select, viewer, CSV");
     console.log(JSON.stringify(state, null, 2));
   } finally {
     await browser.close();
@@ -133,6 +123,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error("FAIL —", e.message);
+  console.error("FAIL -", e.message);
   process.exit(1);
 });

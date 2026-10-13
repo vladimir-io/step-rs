@@ -1,0 +1,33 @@
+# steprs
+
+> Coaxial and stepped hole detection from STEP (ISO 10303-21) in the browser. Local WebAssembly. Files stay on device. Not CAM.
+
+Site: https://steprs.dev/
+Source: https://github.com/vladimir-io/step-rs
+License: MIT
+
+## Does
+
+- Coaxial stepped bores (aligned cylinders, diameters, segments, depth)
+- Through and blind holes
+- 3D preview (OpenCascade when possible)
+- CSV export
+- Client-side only (WASM + Web Worker)
+
+## Does not
+
+- CAM / toolpaths / G-code
+- CAD editing
+- File upload to a server
+
+## Formats
+
+- Part 21 AP203 / AP214 (`.step` `.stp` `.p21`)
+- Lengths in mm
+
+## Dev
+
+- CLI: `cargo run -p steprs-cli -- analyze samples/ap214_compact.step`
+- WASM: `analyzeStep(stepText)` -> JSON
+- Details: https://github.com/vladimir-io/step-rs/blob/main/README.md
+- Longer notes: https://steprs.dev/llms-full.txt

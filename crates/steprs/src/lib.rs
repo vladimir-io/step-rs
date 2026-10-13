@@ -1,4 +1,4 @@
-//! End-to-end STEP analysis pipeline — B-rep topology and coaxial hole detection.
+//! End-to-end STEP analysis pipeline - B-rep topology and coaxial hole detection.
 
 mod regression;
 mod web;
@@ -33,7 +33,7 @@ pub struct AnalysisResult {
     pub registry: EntityRegistry,
     pub brep: BRepSummary,
     pub features: FeatureModel,
-    /// Output of `detect_coaxial_holes` only — face-clustered step bores and through bores.
+    /// Output of `detect_coaxial_holes` only - face-clustered step bores and through bores.
     pub coaxial_holes: Vec<ManufacturingFeature>,
     /// Context-free structural summary (no spatial metadata).
     pub structural_summary: StructuralSummary,
@@ -107,7 +107,7 @@ pub fn analyze_json(content: &str) -> Result<String, steprs_core::ParseError> {
     serde_json::to_string_pretty(&result).map_err(serde_err)
 }
 
-/// Browser-optimized JSON — no full entity registry.
+/// Browser-optimized JSON - no full entity registry.
 pub fn analyze_web_json(content: &str) -> Result<String, steprs_core::ParseError> {
     analyze_web_json_with_progress(content, None)
 }

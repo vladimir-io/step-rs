@@ -41,19 +41,20 @@ jobs:
       - name: Verify WASM bundle
         run: test -f web/pkg/steprs_wasm.js
 
-      - name: Stage samples
+      - name: Stage samples and OCCT vendor
         run: |
-          rm -f web/samples
+          rm -rf web/samples
           cp -r samples web/samples
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install Playwright
+      - name: Install Playwright + OCCT vendor
         run: |
           cd web
           npm ci
+          npm run vendor
           npx playwright install chromium --with-deps
 
       - name: Run E2E smoke test

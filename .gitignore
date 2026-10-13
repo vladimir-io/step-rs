@@ -3,9 +3,15 @@
 /web/pkg/
 /crates/steprs-wasm/pkg/
 /web/node_modules
+/web/vendor
 /web/.test-server.pid
 /web/e2e-screenshot.png
 /web/e2e-debug.png
+/web/e2e-viewer-check.png
+/web/e2e-ap214-compact.png
+/web/e2e-landing.png
+/web/e2e-workspace.png
+/web/e2e-mobile.png
 /web/samples
 samples/samples
 *.wasm

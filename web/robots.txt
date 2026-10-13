@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
 
+# Product summary for crawlers
+# https://steprs.dev/llms.txt
+
 Sitemap: https://steprs.dev/sitemap.xml

@@ -7,7 +7,7 @@ use steprs::{analyze_step, parse_only, run_system_tests};
 #[command(
     name = "steprs",
     version,
-    about = "STEP B-rep coaxial hole extractor — steprs.dev"
+    about = "STEP B-rep coaxial hole extractor - steprs.dev"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let status = run_system_tests();
             for case in &status.cases {
                 let mark = if case.pass { "PASS" } else { "FAIL" };
-                println!("{mark}  {} — {}", case.name, case.detail);
+                println!("{mark}  {} - {}", case.name, case.detail);
             }
             if !status.all_pass {
                 std::process::exit(1);
@@ -103,7 +103,7 @@ fn print_analysis(result: &steprs::AnalysisResult) {
         result.coaxial_holes.len()
     );
     for (i, f) in result.coaxial_holes.iter().enumerate() {
-        println!("  [{}] {} — {:?}", i + 1, f.label, f.kind);
+        println!("  [{}] {} - {:?}", i + 1, f.label, f.kind);
         if let Some(r) = f.radius {
             println!("       radius: {r:.3} mm");
         }

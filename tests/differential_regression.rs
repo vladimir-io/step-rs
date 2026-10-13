@@ -1,4 +1,4 @@
-//! Differential regression — ground-truth STEP dimensions vs `detect_coaxial_holes`.
+//! Differential regression - ground-truth STEP dimensions vs `detect_coaxial_holes`.
 //!
 //! Ingests fixture STEP files, runs the coaxial detection pipeline (WASM client
 //! entry: `analyze_web_json`), and asserts known mathematical dimensions for

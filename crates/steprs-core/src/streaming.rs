@@ -6,7 +6,7 @@ use crate::record::{EntityInstance, Record};
 use crate::store::RecordStore;
 use std::collections::HashMap;
 
-/// Incremental Part 21 DATA parser — no intermediate `Vec<EntityInstance>`.
+/// Incremental Part 21 DATA parser - no intermediate `Vec<EntityInstance>`.
 pub fn parse_step_streaming(
     content: &str,
     progress: Option<&dyn ParseProgress>,

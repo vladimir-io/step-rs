@@ -3,11 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "vendor": "bash setup-vendor.sh",
     "test:e2e": "node e2e.mjs",
     "test:e2e:install": "playwright install chromium"
   },
+  "dependencies": {
+    "occt-import-js": "0.0.23"
+  },
   "devDependencies": {
-    "gsap": "3.12.7",
     "playwright": "1.49.1"
   }
 }

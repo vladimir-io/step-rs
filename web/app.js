@@ -1,30 +1,31 @@
 import {
-  animateNumber,
-  collapseSections,
   createProgressDriver,
-  revealStagger,
   wait,
 } from "./motion.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import { createViewer3d } from "./viewer3d.js";
-import { initLandingScene } from "./landing-scene.js";
-import { playLandingEntrance } from "./landing-motion.js";
-import {
-  celebrateAnalysisComplete,
-  flashMessage,
-  initMicrointeractions,
-  popSystemTestRow,
-  revealManifestPanel,
-  toggleIpMaskDelight,
-} from "./microinteractions.js";
 
 const $ = (id) => document.getElementById(id);
 
-const FLOW_SECTIONS = () => [$("workspace")];
-
 const SAMPLES = {
-  "cylinder_block.step": "./samples/cylinder_block.step",
-  "ap214_medium.step": "./samples/ap214_medium.step",
+  "ap214_compact.step": "./samples/ap214_compact.step",
+};
+
+const PHASE_LABELS = {
+  header: "reading header...",
+  data_scan: "scanning entities...",
+  indexing: "indexing records...",
+  topology: "building B-rep...",
+  features: "clustering coaxial faces...",
+  post_process: "finishing...",
+};
+
+const KIND_LABELS = {
+  blind_hole: "blind",
+  through_hole: "through",
+  coaxial_step_bore: "step bore",
+  counterbore: "c'bore",
+  countersink: "c'sink",
 };
 
 let wasm;
@@ -32,14 +33,16 @@ let worker;
 let workerReady = false;
 let workerId = 0;
 let lastData = null;
+let lastStepText = null;
 let coaxialRows = [];
 let analyzeGen = 0;
-let systemTestsDone = false;
-let ipMaskingEnabled = false;
+let selectedRow = 0;
+let lastMs = 0;
 
 const progress = createProgressDriver($("progress-bar"), $("progress"));
-const viewer3d = createViewer3d($("canvas-3d"));
-let landingScene = null;
+const viewer3d = createViewer3d($("canvas-3d"), {
+  onStatus: setViewerStatus,
+});
 
 const PHASE_WEIGHTS = {
   data_scan: [0, 65],
@@ -57,18 +60,18 @@ function mapProgress(phase, done, total) {
   return lo + span * 0.5;
 }
 
-function initPageEntrance() {
-  document.body.classList.add("is-ready");
-  const canvas = $("landing-canvas");
-  if (canvas && !document.body.classList.contains("has-results")) {
-    landingScene = initLandingScene(canvas);
-    playLandingEntrance();
-  }
+function setPhase(text) {
+  const el = $("phase-label");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
 }
 
-function stopLandingScene() {
-  landingScene?.destroy();
-  landingScene = null;
+function setViewerStatus(text) {
+  const el = $("viewer-status");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
 }
 
 async function initWasm() {
@@ -87,9 +90,8 @@ async function initWasm() {
       });
       worker.postMessage({ id: 0, type: "init" });
     });
-    await runSystemTests();
   } catch {
-    setMessage("make wasm", true);
+    setMessage("Run `make wasm` then reload.", true);
   }
 }
 
@@ -100,7 +102,9 @@ function analyzeInWorker(text, onProgress) {
     const handler = (ev) => {
       if (ev.data?.id !== id) return;
       if (ev.data.type === "progress") {
-        const pct = mapProgress(ev.data.phase, ev.data.done, ev.data.total ?? 0);
+        const phase = ev.data.phase;
+        setPhase(PHASE_LABELS[phase] ?? phase);
+        const pct = mapProgress(phase, ev.data.done, ev.data.total ?? 0);
         if (pct != null) onProgress?.(pct);
         return;
       }
@@ -116,6 +120,7 @@ function analyzeInWorker(text, onProgress) {
 async function analyze(content, onProgress) {
   if (workerReady) return analyzeInWorker(content, onProgress);
   return wasm.analyzeStepOptionsWithProgress(content, "{}", (phase, done, total) => {
+    setPhase(PHASE_LABELS[phase] ?? phase);
     const pct = mapProgress(phase, done, total ?? 0);
     if (pct != null) onProgress?.(pct);
   });
@@ -126,7 +131,6 @@ function setMessage(text, isError = false) {
   el.textContent = text;
   el.classList.toggle("error", isError);
   el.classList.toggle("hidden", !text);
-  if (text) flashMessage(el, isError);
 }
 
 function escapeHtml(s) {
@@ -135,38 +139,43 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-function vec3(v) {
-  if (!v) return null;
-  if (Array.isArray(v) && v.length >= 3) return v;
-  if (v.x != null) return [v.x, v.y, v.z];
-  return null;
+function diameterMm(radius) {
+  if (radius == null || !Number.isFinite(radius)) return "";
+  return (radius * 2).toFixed(3);
 }
 
-function fmtNum(n, d = 3) {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return n.toFixed(d);
+function formatKind(kind) {
+  if (!kind) return "";
+  return KIND_LABELS[kind] ?? String(kind).replaceAll("_", " ");
 }
 
 function buildCoaxialRows(holes) {
-  return holes.map((f, i) => {
-    const o = vec3(f.axis_origin);
-    const d = vec3(f.axis_direction);
-    return {
-      index: i + 1,
-      kind: f.kind ?? "",
-      label: f.label ?? "",
-      face_ids: (f.face_ids ?? []).join(","),
-      radius_mm: f.radius != null ? f.radius.toFixed(4) : "",
-      depth_mm: f.depth != null ? f.depth.toFixed(4) : "",
-      ox: o ? fmtNum(o[0]) : "",
-      oy: o ? fmtNum(o[1]) : "",
-      oz: o ? fmtNum(o[2]) : "",
-      dx: d ? fmtNum(d[0], 4) : "",
-      dy: d ? fmtNum(d[1], 4) : "",
-      dz: d ? fmtNum(d[2], 4) : "",
-      seg: f.face_ids?.length ?? 0,
-    };
-  });
+  return holes.map((f, i) => ({
+    index: i + 1,
+    kind: f.kind ?? "",
+    kindLabel: formatKind(f.kind),
+    label: f.label ?? "",
+    radius_mm: diameterMm(f.radius),
+    depth_mm: f.depth != null ? Number(f.depth).toFixed(3) : "",
+    seg: f.face_ids?.length ?? 0,
+  }));
+}
+
+function selectHoleRow(index, { scroll = true } = {}) {
+  const rows = $("coaxial-table-body")?.querySelectorAll("tr");
+  if (!rows?.length) return;
+  selectedRow = Math.max(0, Math.min(index, rows.length - 1));
+  rows.forEach((tr, i) => tr.classList.toggle("selected", i === selectedRow));
+  viewer3d.highlightHole?.(selectedRow);
+  const row = coaxialRows[selectedRow];
+  const label = $("viewer-hole-label");
+  if (label && row) {
+    const segs = row.seg > 1 ? ` · ${row.seg} segs` : "";
+    label.textContent = `${row.kindLabel} · Ø${row.radius_mm} × ${row.depth_mm} mm${segs}`;
+  }
+  if (scroll) {
+    rows[selectedRow]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
 }
 
 function renderCoaxialTable(data) {
@@ -183,7 +192,7 @@ function renderCoaxialTable(data) {
     tbody.innerHTML = "";
     table?.classList.add("hidden");
     empty?.classList.remove("hidden");
-    if (countLabel) countLabel.textContent = "0 clusters";
+    if (countLabel) countLabel.textContent = "0 found";
     if (exportBtn) exportBtn.disabled = true;
     return;
   }
@@ -191,211 +200,55 @@ function renderCoaxialTable(data) {
   table?.classList.remove("hidden");
   empty?.classList.add("hidden");
   if (exportBtn) exportBtn.disabled = false;
-  if (countLabel) countLabel.textContent = `${holes.length} cluster${holes.length === 1 ? "" : "s"}`;
+  if (countLabel) {
+    countLabel.textContent = `${holes.length} coaxial cluster${holes.length === 1 ? "" : "s"} · mm`;
+  }
 
   tbody.innerHTML = coaxialRows
     .map(
-      (r) => `
-    <tr>
-      <td>${r.index}</td>
-      <td>${escapeHtml(r.kind)}</td>
-      <td class="col-label">${escapeHtml(r.label)}</td>
-      <td class="col-ids">${escapeHtml(r.face_ids)}</td>
-      <td>${escapeHtml(r.radius_mm)}</td>
-      <td>${escapeHtml(r.depth_mm)}</td>
-      <td>${escapeHtml(r.ox)}</td>
-      <td>${escapeHtml(r.oy)}</td>
-      <td>${escapeHtml(r.oz)}</td>
-      <td>${escapeHtml(r.dx)}</td>
-      <td>${escapeHtml(r.dy)}</td>
-      <td>${escapeHtml(r.dz)}</td>
-      <td>${r.seg}</td>
+      (r, i) => `
+    <tr data-index="${i}" class="${i === selectedRow ? "selected" : ""}" tabindex="-1">
+      <td class="col-num">${r.index}</td>
+      <td class="col-kind">${escapeHtml(r.kindLabel)}</td>
+      <td class="col-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</td>
+      <td class="col-num">${escapeHtml(r.radius_mm)}</td>
+      <td class="col-num">${escapeHtml(r.depth_mm)}</td>
+      <td class="col-num">${r.seg}</td>
     </tr>`
     )
     .join("");
-}
 
-function renderDiagnostics(data) {
-  const el = $("diag-out");
-  if (!el) return;
-  const s = data.stats;
-  const lines = [];
-  if (s.parse_errors > 0) lines.push(`${s.parse_errors} parse skips`);
-  if (!lines.length) {
-    el.classList.add("hidden");
-    el.innerHTML = "";
-    return;
-  }
-  el.classList.remove("hidden");
-  el.innerHTML = lines.map((l) => `<span class="diag-line">${escapeHtml(l)}</span>`).join("");
-}
-
-async function animateMetrics(data) {
-  const s = data.stats;
-  const coaxial = data.coaxial_holes?.length ?? 0;
-  const b = data.brep;
-
-  await Promise.all([
-    animateNumber($("m-records"), s.record_count, { duration: 300, decimals: 0 }),
-    animateNumber($("m-coaxial"), coaxial, { duration: 300, decimals: 0 }),
-  ]);
-
-  if ($("m-faces")) $("m-faces").textContent = b?.face_count != null ? String(b.face_count) : "—";
-  if ($("m-protocol")) $("m-protocol").textContent = s.application_protocol || "—";
-  if ($("m-unit")) $("m-unit").textContent = s.length_unit ?? "mm";
-}
-
-function renderSystemTestLists(cases) {
-  const html = cases
-    .map((c) => {
-      const cls = c.pass ? "pass" : c.pass === false ? "fail" : "pending";
-      const mark = c.pass ? "✓" : c.pass === false ? "✗" : "…";
-      return `<li class="system-test-row ${cls}"><span class="system-test-mark">${mark}</span><span class="system-test-name">${escapeHtml(c.name)}</span><span class="system-test-detail">${escapeHtml(c.detail)}</span></li>`;
-    })
-    .join("");
-
-  for (const id of ["system-tests-list", "system-tests-landing-list"]) {
-    const el = $(id);
-    if (!el) continue;
-    const prev = new Set([...el.querySelectorAll(".system-test-row.pass")].map((r) => r.querySelector(".system-test-name")?.textContent));
-    el.innerHTML = html;
-    [...el.querySelectorAll(".system-test-row")].forEach((row) => {
-      const name = row.querySelector(".system-test-name")?.textContent;
-      if (row.classList.contains("pass") && !prev.has(name)) popSystemTestRow(row);
-    });
-  }
-}
-
-async function runSystemTests() {
-  if (!wasm || systemTestsDone) return;
-  const cases = [];
-
-  try {
-    const cylinder = JSON.parse(wasm.verifyCylinderBlockRegression());
-    cases.push(cylinder);
-  } catch (e) {
-    cases.push({ name: "cylinder_block.step", pass: false, detail: String(e) });
-  }
-
-  renderSystemTestLists(
-    cases.concat([{ name: "AP214 fixtures", pass: false, detail: "running…" }])
-  );
-
-  try {
-    const specs = JSON.parse(wasm.regressionSpecs());
-    for (const spec of specs) {
-      const url = SAMPLES[spec.name] ?? `./samples/${spec.name}`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        const result = JSON.parse(wasm.verifyRegressionSample(text, JSON.stringify(spec)));
-        cases.push(result);
-      } catch (e) {
-        cases.push({ name: spec.name, pass: false, detail: String(e) });
-      }
-      renderSystemTestLists(cases);
-    }
-  } catch (e) {
-    cases.push({ name: "AP214 fixtures", pass: false, detail: String(e) });
-  }
-
-  systemTestsDone = true;
-  renderSystemTestLists(cases);
-}
-
-function updateExportButton() {
-  const btn = $("export-csv");
-  if (!btn) return;
-  btn.textContent = ipMaskingEnabled ? "Export Manifest" : "Export CSV";
-}
-
-function refreshManifestPreview() {
-  const panel = $("manifest-panel");
-  const pre = $("manifest-preview");
-  const copyBtn = $("copy-manifest");
-  if (!panel || !pre) return;
-
-  const show = ipMaskingEnabled && lastData?.structural_summary;
-  panel.classList.toggle("hidden", !show);
-  if (!show) {
-    pre.textContent = "";
-    if (copyBtn) copyBtn.disabled = true;
-    return;
-  }
-
-  const text = JSON.stringify(lastData.structural_summary, null, 2);
-  pre.textContent = text;
-  if (copyBtn) copyBtn.disabled = false;
-  revealManifestPanel(panel);
-}
-
-function initIpMaskToggle() {
-  const toggle = $("ip-mask-toggle");
-  if (!toggle) return;
-  try {
-    ipMaskingEnabled = localStorage.getItem("steprs-ip-mask") === "1";
-    toggle.checked = ipMaskingEnabled;
-  } catch {
-    /* ignore */
-  }
-  toggle.addEventListener("change", () => {
-    ipMaskingEnabled = toggle.checked;
-    toggleIpMaskDelight(toggle);
-    try {
-      localStorage.setItem("steprs-ip-mask", ipMaskingEnabled ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-    updateExportButton();
-    refreshManifestPreview();
+  tbody.querySelectorAll("tr").forEach((tr) => {
+    tr.addEventListener("click", () => selectHoleRow(Number(tr.dataset.index)));
   });
-  updateExportButton();
-  refreshManifestPreview();
+
+  if (coaxialRows.length) selectHoleRow(selectedRow, { scroll: false });
 }
 
-function exportData() {
-  if (ipMaskingEnabled) exportStructuralManifest();
-  else exportCoaxialCsv();
-}
-
-function exportStructuralManifest() {
-  const summary = lastData?.structural_summary;
-  if (!summary) return;
-  const text = JSON.stringify(summary, null, 2);
-  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "steprs-structural-manifest.json";
-  a.click();
-  URL.revokeObjectURL(url);
+function renderMetrics(data, ms) {
+  const coaxial = data.coaxial_holes?.length ?? 0;
+  $("m-coaxial").textContent = String(coaxial);
+  if ($("m-time")) $("m-time").textContent = ms != null ? `${ms} ms` : "-";
 }
 
 function exportCoaxialCsv() {
   if (!coaxialRows.length) return;
-  const headers = [
-    "index",
-    "kind",
-    "label",
-    "face_ids",
-    "radius_mm",
-    "depth_mm",
-    "ox",
-    "oy",
-    "oz",
-    "dx",
-    "dy",
-    "dz",
-    "seg",
-  ];
+  const headers = ["index", "kind", "label", "diameter_mm", "depth_mm", "segments"];
   const esc = (v) => {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [headers.join(",")];
   for (const r of coaxialRows) {
-    lines.push(headers.map((h) => esc(r[h])).join(","));
+    const row = {
+      index: r.index,
+      kind: r.kind,
+      label: r.label,
+      diameter_mm: r.radius_mm,
+      depth_mm: r.depth_mm,
+      segments: r.seg,
+    };
+    lines.push(headers.map((h) => esc(row[h])).join(","));
   }
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -406,22 +259,19 @@ function exportCoaxialCsv() {
   URL.revokeObjectURL(url);
 }
 
-async function presentResults(data) {
-  await revealStagger(FLOW_SECTIONS());
-  await animateMetrics(data);
-  renderDiagnostics(data);
+function presentResults(data, stepText) {
+  $("workspace")?.classList.remove("hidden");
+  renderMetrics(data, lastMs);
   renderCoaxialTable(data);
-  refreshManifestPreview();
-  celebrateAnalysisComplete();
   requestAnimationFrame(() => {
-    viewer3d.load(data);
+    viewer3d.load(stepText, data);
     viewer3d.resize?.();
+    if (data.coaxial_holes?.length) selectHoleRow(0, { scroll: false });
   });
 }
 
 function onLayoutChange() {
   viewer3d.resize?.();
-  if (lastData) viewer3d.refresh?.();
 }
 
 window.addEventListener("resize", onLayoutChange);
@@ -434,7 +284,7 @@ if (typeof ResizeObserver !== "undefined") {
 }
 onThemeChange(() => {
   onLayoutChange();
-  landingScene?.applyTheme?.();
+  if (lastStepText && lastData) viewer3d.load(lastStepText, lastData);
 });
 
 const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
@@ -446,29 +296,23 @@ function isStepText(text) {
 async function loadSample(name) {
   const url = SAMPLES[name] ?? `./samples/${name}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Sample not found (${res.status})`);
+  if (!res.ok) throw new Error(`sample not found (${res.status})`);
   const text = await res.text();
-  if (!isStepText(text)) throw new Error("Sample file is not valid STEP Part 21");
+  if (!isStepText(text)) throw new Error("not a STEP Part 21 file");
   await analyzeText(text, name, text.length);
 }
 
 async function analyzeText(text, name, size) {
   if (!wasm) {
-    setMessage("make wasm", true);
+    setMessage("Run `make wasm` then reload.", true);
     return;
   }
 
   const gen = ++analyzeGen;
-  stopLandingScene();
-  if (!document.body.classList.contains("has-results")) {
-    await collapseSections(FLOW_SECTIONS());
-  }
-  if (gen !== analyzeGen) return;
-
-  document.body.classList.remove("has-results");
   document.body.classList.add("analyzing");
   $("dropzone")?.classList.add("is-busy");
   setMessage("");
+  setPhase("starting...");
   progress.reset();
   $("progress")?.classList.remove("hidden");
   progress.indeterminate(false);
@@ -481,39 +325,60 @@ async function analyzeText(text, name, size) {
     });
     if (gen !== analyzeGen) return;
 
+    setPhase("rendering...");
     progress.set(98);
     await wait(40);
 
     lastData = JSON.parse(json);
-    const ms = Math.round(performance.now() - t0);
+    lastStepText = text;
+    lastMs = Math.round(performance.now() - t0);
 
     await progress.finish();
     if (gen !== analyzeGen) return;
 
-    await presentResults(lastData);
+    presentResults(lastData, text);
     document.body.classList.add("has-results");
     $("landing")?.classList.add("hidden");
     $("dropzone")?.classList.remove("hidden");
     $("status-bar")?.classList.remove("hidden");
     const label = $("drop-label");
-    if (label) label.textContent = name;
+    if (label) label.textContent = truncateName(name);
+    selectedRow = 0;
 
     const coaxial = lastData.coaxial_holes?.length ?? 0;
-    const unit = lastData.stats?.length_unit ?? "mm";
-    $("file-meta").textContent = `${name} · ${formatBytes(size)} · ${ms} ms · ${coaxial} coaxial · ${unit}`;
+    const proto = lastData.stats?.application_protocol || "STEP";
+    $("file-meta").textContent =
+      `${truncateName(name, 40)} · ${formatBytes(size)} · ${proto} · ${lastMs} ms · ${coaxial} bore${coaxial === 1 ? "" : "s"} · mm`;
     setMessage("");
   } catch (e) {
     if (gen !== analyzeGen) return;
-    setMessage(String(e), true);
+    setMessage(explainError(e), true);
   } finally {
     if (gen === analyzeGen) {
       document.body.classList.remove("analyzing");
       $("dropzone")?.classList.remove("is-busy");
-      await wait(300);
+      setPhase("");
+      await wait(180);
       $("progress")?.classList.add("hidden");
       progress.reset();
     }
   }
+}
+
+function explainError(e) {
+  const s = String(e?.message ?? e);
+  if (s.includes("worker not ready")) return "Engine still loading. Try again.";
+  if (s.includes("not STEP") || s.includes("ISO-10303")) return "Not a STEP Part 21 file (.step / .stp / .p21).";
+  return s;
+}
+
+function truncateName(name, max = 36) {
+  if (!name || name.length <= max) return name;
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  const stem = ext ? name.slice(0, -ext.length) : name;
+  const keep = max - ext.length - 1;
+  if (keep < 8) return name.slice(0, max - 1) + "...";
+  return stem.slice(0, keep) + "..." + ext;
 }
 
 function formatBytes(n) {
@@ -522,28 +387,9 @@ function formatBytes(n) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-$("export-csv")?.addEventListener("click", exportData);
-
-$("copy-manifest")?.addEventListener("click", async () => {
-  const text = $("manifest-preview")?.textContent;
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-    const btn = $("copy-manifest");
-    const prev = btn.textContent;
-    btn.textContent = "Copied";
-    setTimeout(() => {
-      btn.textContent = prev;
-    }, 1200);
-  } catch {
-    exportStructuralManifest();
-  }
-});
+$("export-csv")?.addEventListener("click", exportCoaxialCsv);
 
 initTheme();
-initPageEntrance();
-initMicrointeractions();
-initIpMaskToggle();
 
 function openFilePicker() {
   const input = $("file-input");
@@ -555,22 +401,22 @@ function openFilePicker() {
 async function processFile(file) {
   if (!file) return;
   if (file.size === 0) {
-    setMessage("Empty file — drop a valid STEP (.step, .stp, .p21)", true);
+    setMessage("Empty file.", true);
     return;
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    setMessage("File exceeds 120 MB limit", true);
+    setMessage("File exceeds 120 MB limit.", true);
     return;
   }
   let text;
   try {
     text = await file.text();
   } catch {
-    setMessage("Could not read file", true);
+    setMessage("Couldn't read that file.", true);
     return;
   }
   if (!isStepText(text)) {
-    setMessage("Not a STEP Part 21 file (missing ISO-10303-21 header)", true);
+    setMessage("Not a STEP Part 21 file (.step / .stp / .p21).", true);
     return;
   }
   await analyzeText(text, file.name, file.size);
@@ -579,7 +425,7 @@ async function processFile(file) {
 function bindDropTarget(el) {
   if (!el) return;
   el.addEventListener("click", (e) => {
-    if (e.target.closest(".sample-chip, .landing-dock, .landing-drop-wrap, .landing-sample-cta, #landing-cta, #try-sample, button, a, input")) return;
+    if (e.target.closest(".sample-link, #landing-cta, .landing-faq, button, a, input")) return;
     openFilePicker();
   });
   el.addEventListener("keydown", (e) => {
@@ -615,7 +461,7 @@ $("file-input")?.addEventListener("change", () => {
   if (f) processFile(f);
 });
 
-document.querySelectorAll(".sample-chip, .landing-sample-cta").forEach((btn) => {
+document.querySelectorAll(".sample-link").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
     e.stopPropagation();
     const name = btn.dataset.sample;
@@ -623,9 +469,29 @@ document.querySelectorAll(".sample-chip, .landing-sample-cta").forEach((btn) => 
     try {
       await loadSample(name);
     } catch (err) {
-      setMessage(String(err), true);
+      setMessage(explainError(err), true);
     }
   });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (!document.body.classList.contains("has-results")) return;
+  if (e.target.matches("input, textarea, select, button")) return;
+  if (!coaxialRows.length) return;
+
+  if (e.key === "ArrowDown" || e.key === "j") {
+    e.preventDefault();
+    selectHoleRow(selectedRow + 1);
+  } else if (e.key === "ArrowUp" || e.key === "k") {
+    e.preventDefault();
+    selectHoleRow(selectedRow - 1);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    selectHoleRow(0);
+  } else if (e.key === "End") {
+    e.preventDefault();
+    selectHoleRow(coaxialRows.length - 1);
+  }
 });
 
 initWasm();

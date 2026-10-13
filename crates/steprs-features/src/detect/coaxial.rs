@@ -83,7 +83,7 @@ fn coaxial_cluster_feature(cylindrical: &[CylFace], cluster: &[usize]) -> Manufa
         (
             ManufacturingFeatureKind::BlindHole,
             format!(
-                "Coaxial step bore — {} segments, Ø{:.2} → Ø{:.2}",
+                "Coaxial step bore - {} segments, Ø{:.2} -> Ø{:.2}",
                 cluster.len(),
                 max_r * 2.0,
                 min_r * 2.0
@@ -94,7 +94,7 @@ fn coaxial_cluster_feature(cylindrical: &[CylFace], cluster: &[usize]) -> Manufa
         (
             ManufacturingFeatureKind::ThroughHole,
             format!(
-                "Through coaxial bore — {} faces, Ø{:.2}",
+                "Through coaxial bore - {} faces, Ø{:.2}",
                 cluster.len(),
                 max_r * 2.0
             ),

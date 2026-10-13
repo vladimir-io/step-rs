@@ -37,10 +37,11 @@ jobs:
 
       - name: Stage static site
         run: |
-          rm -f web/samples
+          rm -rf web/samples
           cp -r samples web/samples
+          cd web && npm ci && npm run vendor
           mkdir -p site
-          rsync -a web/ site/ --exclude node_modules
+          rsync -a web/ site/ --exclude node_modules --exclude e2e.mjs --exclude e2e-*.png --exclude package-lock.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

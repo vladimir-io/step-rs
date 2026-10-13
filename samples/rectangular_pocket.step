@@ -1,6 +1,6 @@
 ISO-10303-21;
 HEADER;
-FILE_DESCRIPTION(('steprs pocket — 100x100x20 block, 40x30 pocket'),'2;1');
+FILE_DESCRIPTION(('steprs pocket - 100x100x20 block, 40x30 pocket'),'2;1');
 FILE_NAME('rectangular_pocket.step','2026-06-03T12:00:00',('steprs'),('steprs.dev'),'steprs','steprs','');
 FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 3 1 1 }'));
 ENDSEC;
